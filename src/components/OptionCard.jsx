@@ -1,11 +1,12 @@
 export default function OptionCard({ label, selected, onClick }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={`rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors ${
+      className={`rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
         selected
-          ? 'border-lime bg-lime/10 text-white'
-          : 'border-line bg-panel text-white/70 hover:border-white/30'
+          ? 'border-brand bg-brand-soft text-text'
+          : 'border-line bg-panel text-text-dim hover:border-brand/40 hover:text-text'
       }`}
     >
       {label}

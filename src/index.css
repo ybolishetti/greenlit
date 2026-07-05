@@ -1,15 +1,18 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ink: #0a0d0a;
-  --color-panel: #12160f;
-  --color-panel-2: #191f16;
-  --color-line: #262e21;
-  --color-lime: #b6ff3c;
-  --color-lime-dim: #8fd82a;
-  --color-ok: #4ade80;
-  --color-warn: #fbbf24;
-  --color-danger: #f87171;
+  --color-brand: #4CAF6B;
+  --color-brand-dim: #3F9558;
+  --color-brand-soft: #4CAF6B14;
+  --color-ink: #0F1613;
+  --color-panel: #161E1B;
+  --color-line: #26312D;
+  --color-text: #EDF3EF;
+  --color-text-dim: #EDF3EF99;
+  --color-text-mute: #EDF3EF66;
+  --color-ok: #4CAF6B;
+  --color-warn: #E0B341;
+  --color-danger: #D46A5B;
 }
 
 :root {
@@ -23,18 +26,18 @@ html, body, #root {
 body {
   margin: 0;
   background: var(--color-ink);
-  color: #e7ede2;
+  color: var(--color-text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
 ::selection {
-  background: var(--color-lime);
-  color: #0a0d0a;
+  background: var(--color-brand);
+  color: var(--color-ink);
 }
 
-.range-lime {
-  accent-color: var(--color-lime);
+.range-brand {
+  accent-color: var(--color-brand);
 }
 
 .scrollbar-none::-webkit-scrollbar {

@@ -1,0 +1,100 @@
+import { useEffect, useRef, useState } from 'react'
+import { Video, Square, Trash2 } from 'lucide-react'
+
+export default function VideoRecorder({ onCapture }) {
+  const [recording, setRecording] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState(null)
+  const [blob, setBlob] = useState(null)
+  const [seconds, setSeconds] = useState(0)
+  const [error, setError] = useState(null)
+
+  const recorderRef = useRef(null)
+  const streamRef = useRef(null)
+  const chunksRef = useRef([])
+  const timerRef = useRef(null)
+
+  useEffect(() => {
+    onCapture?.(blob)
+  }, [blob, onCapture])
+
+  useEffect(() => () => {
+    clearInterval(timerRef.current)
+    streamRef.current?.getTracks().forEach((t) => t.stop())
+  }, [])
+
+  const start = async () => {
+    setError(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      streamRef.current = stream
+      const recorder = new MediaRecorder(stream)
+      chunksRef.current = []
+      recorder.ondataavailable = (e) => chunksRef.current.push(e.data)
+      recorder.onstop = () => {
+        const b = new Blob(chunksRef.current, { type: 'video/webm' })
+        setBlob(b)
+        setPreviewUrl(URL.createObjectURL(b))
+        stream.getTracks().forEach((t) => t.stop())
+      }
+      recorder.start()
+      recorderRef.current = recorder
+      setRecording(true)
+      setSeconds(0)
+      timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000)
+    } catch {
+      setError('Camera access was blocked. Try describing the problem in text instead.')
+    }
+  }
+
+  const stop = () => {
+    recorderRef.current?.stop()
+    setRecording(false)
+    clearInterval(timerRef.current)
+  }
+
+  const clear = () => {
+    setBlob(null)
+    setPreviewUrl(null)
+    setSeconds(0)
+  }
+
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+
+  return (
+    <div className="rounded-2xl border border-line bg-panel p-6">
+      {!previewUrl && !recording && (
+        <div className="flex flex-col items-center gap-4 py-6 text-center">
+          <button
+            onClick={start}
+            className="flex h-16 w-16 items-center justify-center rounded-full bg-brand text-ink hover:bg-brand-dim"
+          >
+            <Video size={26} />
+          </button>
+          <p className="font-medium">Tap to record video</p>
+          {error && <p className="text-xs text-danger">{error}</p>}
+        </div>
+      )}
+      {recording && (
+        <div className="flex flex-col items-center gap-4 py-6 text-center">
+          <button
+            onClick={stop}
+            className="flex h-16 w-16 items-center justify-center rounded-full bg-danger text-white animate-pulse"
+          >
+            <Square size={22} />
+          </button>
+          <p className="font-medium">Recording… {fmt(seconds)}</p>
+        </div>
+      )}
+      {previewUrl && !recording && (
+        <div className="space-y-3">
+          <video src={previewUrl} controls className="w-full rounded-lg border border-line" />
+          <div className="flex justify-end">
+            <button onClick={clear} className="inline-flex items-center gap-1 text-sm text-text-dim hover:text-danger">
+              <Trash2 size={14} /> Remove
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

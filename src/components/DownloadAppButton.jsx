@@ -18,9 +18,9 @@ export default function DownloadAppButton({ variant = 'default' }) {
       <div className="relative inline-block">
         <button
           onClick={handleClick}
-          className="inline-flex items-center gap-2 rounded-full border border-line bg-panel px-4 py-2 text-sm font-medium text-white/90 hover:border-lime/50 transition-colors"
+          className="inline-flex items-center gap-2 rounded-full border border-line bg-panel px-4 py-2 text-sm font-medium text-text/90 hover:border-brand/50 transition-colors"
         >
-          <Lock size={14} className="text-lime" />
+          <Lock size={14} className="text-brand" />
           Get the lock screen shortcut
         </button>
         {clicked && <ComingSoonBubble />}
@@ -44,8 +44,8 @@ export default function DownloadAppButton({ variant = 'default' }) {
 
 function ComingSoonBubble() {
   return (
-    <div className="absolute left-1/2 top-full z-20 mt-2 w-64 -translate-x-1/2 rounded-lg border border-line bg-panel-2 p-3 text-xs text-white/70 shadow-xl">
-      <p className="font-medium text-white">Coming soon</p>
+    <div className="absolute left-1/2 top-full z-20 mt-2 w-64 -translate-x-1/2 rounded-lg border border-line bg-panel p-3 text-xs text-text-dim shadow-xl">
+      <p className="font-medium text-text">Coming soon</p>
       <p className="mt-1">
         The lock screen shortcut needs the native iOS app. Everything else on
         this page already works in the browser.

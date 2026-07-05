@@ -1,26 +1,30 @@
 import { Routes, Route } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import Landing from './pages/Landing'
-import IntakeFlow from './pages/intake/IntakeFlow'
+import IntakeNew from './pages/intake/IntakeNew'
+import IntakeSession from './pages/intake/IntakeSession'
 import BriefResult from './pages/BriefResult'
 import ShopLanding from './pages/ShopLanding'
 import ShopDashboard from './pages/ShopDashboard'
+import IntakeDebug from './pages/dev/IntakeDebug'
 
 function App() {
   return (
-    <div className="min-h-screen bg-ink text-white">
+    <div className="min-h-screen bg-ink text-text">
       <Navbar />
       <main>
         <Routes>
           <Route path="/" element={<Landing />} />
-          <Route path="/intake" element={<IntakeFlow />} />
+          <Route path="/intake" element={<IntakeNew />} />
+          <Route path="/intake/:id" element={<IntakeSession />} />
           <Route path="/brief/:id" element={<BriefResult />} />
           <Route path="/shop/:shopId" element={<ShopLanding />} />
           <Route path="/shop/:shopId/dashboard" element={<ShopDashboard />} />
+          <Route path="/dev/intake/:id" element={<IntakeDebug />} />
         </Routes>
       </main>
-      <footer className="border-t border-line/60 py-8 text-center text-xs text-white/30">
-        Greenlit — speak mechanic. · Demo build, not for production use.
+      <footer className="border-t border-line/60 py-8 text-center text-xs text-text-mute">
+        Greenlit — speak mechanic.
       </footer>
     </div>
   )

@@ -17,7 +17,7 @@ export default function Navbar() {
           </Link>
           <Link
             to="/intake"
-            className="rounded-full bg-lime px-4 py-2 font-medium text-ink hover:bg-lime-dim transition-colors"
+            className="rounded-full bg-brand px-4 py-2 font-medium text-ink hover:bg-brand-dim transition-colors"
           >
             Start intake
           </Link>
