@@ -75,6 +75,30 @@ Deno.serve(async (req) => {
       return jsonOk({ signed_url: data.signedUrl, expires_in: SIGNED_URL_TTL_SECONDS })
     }
 
+    if (intent === 'diagnostician_final' && payload.stub_brief) {
+      const allowed = await canCallLlm(admin, intakeId, userId)
+      if (!allowed) return jsonError(403, 'forbidden', 'Intake session expired or not accessible')
+
+      const stubResult = FinalBriefSchema.safeParse(payload.stub_brief)
+      if (!stubResult.success) {
+        return jsonError(422, 'validation_failed', formatZodError(stubResult.error))
+      }
+
+      const brief = stubResult.data
+      const { error: updateError } = await admin
+        .from('intakes')
+        .update({
+          brief,
+          status: 'complete',
+          urgency: brief.urgency,
+          category: brief.category,
+        })
+        .eq('id', intakeId)
+
+      if (updateError) return jsonError(500, 'brief_persist_failed', updateError.message)
+      return jsonOk({ result: brief })
+    }
+
     // LLM intents
     if (!intakeId) return jsonError(400, 'missing_intake_id', 'intake_id is required')
 
