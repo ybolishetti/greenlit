@@ -1,52 +1,95 @@
-# Greenlit — web prototype
+# Greenlit — web
 
-A functional web version of the Greenlit consumer + shop flows described in
-the business plan, built so almost nothing requires the native iOS app.
+Greenlit turns a car owner's vague symptom description into a mechanic-ready diagnostic brief. This is the web pitch/demo surface; the native iOS lock-screen shortcut is deferred.
 
-## Run it
+**Recommended browser:** Google Chrome (desktop or Android). iOS Safari has known `MediaRecorder` limitations that are not addressed until the native app ships.
+
+## Quick start (demo, no backend)
 
 ```bash
 npm install
-npm run dev       # local dev server
-npm run build     # production build -> dist/
-npm run preview   # serve the production build locally
+npm run dev
 ```
 
-## What works in the browser
+With no `.env.local`, the app runs in **stub mode** — a deterministic 2-round intake script drives the flow with no Supabase or LLM keys required.
 
-- **Consumer intake flow** (`/intake`): guided questions, feel sliders,
-  in-browser microphone recording (or audio file upload), photo/video
-  upload, free-text notes.
-- **Mechanic brief** (`/brief/:id`): rules-based mock diagnosis engine
-  (`src/lib/mockDiagnosis.js`) generates ranked probable causes, an urgency
-  rating, components to inspect, and an estimate range. Downloadable as a
-  PDF via `jspdf`.
-- **Shop QR landing page** (`/shop/:shopId`): what a customer sees after
-  scanning a shop's QR code — links straight into the intake flow with
-  `?shop=` context.
-- **Shop dashboard** (`/shop/:shopId/dashboard`): lists submitted intakes,
-  lets a mechanic rate whether the diagnosis was on target and what repair
-  was actually performed (the outcome-labeling loop from the data
-  strategy section of the plan).
+## Full stack setup
 
-Data is stored in `localStorage` (`src/lib/storage.js`) — good enough for a
-demo/pitch, not a real backend. Swap that module for real API calls when
-you're ready to persist data server-side.
+### 1. Supabase
 
-## What's intentionally a placeholder
+See [supabase/README.md](./supabase/README.md) for schema, RLS, environments, and prod checklist.
 
-The **lock screen shortcut / one-tap background recording** feature
-(`src/components/DownloadAppButton.jsx`) cannot exist on the web — it needs
-native iOS APIs (WidgetKit interactive widgets, App Intents / Shortcuts,
-the Action Button, background audio capture while the phone is locked). The
-"Download the app" button is wired up but intentionally does nothing yet;
-replace `handleClick` with a real App Store link once that native build
-exists. Everything else on this site is fully functional without it.
+```bash
+supabase link --project-ref <ref>
+supabase db push
+```
 
-## Mock diagnosis engine
+### 2. Environment variables
 
-`src/lib/mockDiagnosis.js` is a small rules table mapping
-category + descriptor → probable causes / urgency / components / cost
-range. It stands in for the real multimodal model (Whisper + GPT-4o per the
-plan). Swap `generateBrief()` for a real API call when ready — the rest of
-the UI just consumes whatever shape that function returns.
+Copy `.env.example` to `.env.local`:
+
+```bash
+VITE_SUPABASE_URL=https://<project>.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon-key>
+VITE_LLM_STUB_MODE=true   # set false when Edge Function + OpenAI are ready
+```
+
+Configure the same vars per environment in Vercel (`greenlit-dev`, `greenlit-staging`, `greenlit-prod`).
+
+### 3. Edge Function
+
+```bash
+supabase secrets set OPENAI_API_KEY=sk-...
+supabase secrets set SUPABASE_SERVICE_ROLE_KEY=...
+supabase functions deploy llm-proxy
+```
+
+Set `VITE_LLM_STUB_MODE=false` to use real AI. The Diagnostician endpoint is env-swappable — see TODO markers in `supabase/functions/llm-proxy/index.ts` for the future fine-tuned model swap.
+
+### 4. Prompt sync
+
+System prompts live in `src/lib/ai/prompts/`. Before every build:
+
+```bash
+npm run sync-prompts    # copy to Edge Function bundle
+npm run build           # fails if prompts drift (--check via prebuild)
+```
+
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Local dev server |
+| `npm run build` | Sync prompts + production build |
+| `npm run sync-prompts` | Copy prompts to Edge Function |
+| `npm run replay-intake <id>` | Dump intake log as JSON (needs service role key) |
+
+## Routes
+
+| Path | Description |
+|------|-------------|
+| `/intake` | Input picker + capture |
+| `/intake/:id` | AI conversational loop |
+| `/brief/:id` | Mechanic brief + PDF export |
+| `/shop/:slug` | Shop QR landing page |
+| `/shop/:slug/dashboard` | Magic-link shop dashboard + outcome ratings |
+| `/dev/intake/:id` | Debug replay (dev or `?debug=1` + authed shop member) |
+
+## Architecture notes
+
+- **Anon never SELECTs intake data** — reads go through the `llm-proxy` Edge Function (`get_intake` intent).
+- **Edge Function is authoritative** for `intakes.brief`, `status`, `urgency`, `category` on final diagnosis.
+- **LLM keys** live only in Edge Function secrets, never in the browser bundle.
+- **Message contract** is defined in `src/lib/ai/schemas.js` (canonical); Edge validators mirror it.
+- **`mockDiagnosis.js`** is kept for the stub engine and as a future Diagnostician prior.
+
+## Known limitations (v2)
+
+- No Whisper or vision — LLMs receive metadata + text `media_summary` only.
+- 30-minute anon INSERT window for messages/media (see supabase README).
+- iOS Safari recording is unsupported on web.
+- `DownloadAppButton` is inert until the native app ships.
+
+## Before public launch
+
+See the checklist in [supabase/README.md](./supabase/README.md): audit anon policies, rotate service role key, enable Sentry, schedule `llm_call_log` cleanup.
