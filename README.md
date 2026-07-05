@@ -83,6 +83,14 @@ npm run build           # fails if prompts drift (--check via prebuild)
 - **Message contract** is defined in `src/lib/ai/schemas.js` (canonical); Edge validators mirror it.
 - **`mockDiagnosis.js`** is kept for the stub engine and as a future Diagnostician prior.
 
+### v2.1 architecture formalization (in progress)
+
+The v2 codebase implements the Interviewer + Diagnostician + rules-layer architecture. v2.1 formalizes remaining decisions and closes specific gaps. See:
+
+- **[docs/architecture-v2.1.md](./docs/architecture-v2.1.md)** — canonical architecture spec
+- **[docs/architecture-v2.1-cursor-prompt.md](./docs/architecture-v2.1-cursor-prompt.md)** — implementation task (paste into Cursor)
+- **[docs/architecture-v2.1-business-context.md](./docs/architecture-v2.1-business-context.md)** — business plan amendment (full strategic rationale)
+
 ## Known limitations (v2)
 
 - No Whisper or vision — LLMs receive metadata + text `media_summary` only.
