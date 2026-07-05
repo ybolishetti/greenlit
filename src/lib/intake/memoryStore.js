@@ -2,12 +2,13 @@
 
 const intakes = new Map()
 
-export function memoryCreateIntake({ shopSlug } = {}) {
+export function memoryCreateIntake({ shopSlug, vehicle } = {}) {
   const id = crypto.randomUUID()
   const intake = {
     id,
     shop_id: null,
     shop_slug: shopSlug ?? null,
+    vehicle: vehicle ?? null,
     status: 'in_progress',
     brief: null,
     urgency: null,

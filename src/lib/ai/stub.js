@@ -8,44 +8,19 @@ const ROUND1 = {
     {
       id: 'q_stub_1',
       prompt: 'Where do you notice the problem?',
-      ui: {
-        type: 'single_select',
-        options: [
-          { value: 'brakes', label: 'Brakes' },
-          { value: 'engine', label: 'Engine / under the hood' },
-          { value: 'steering', label: 'Steering wheel' },
-          { value: 'suspension', label: 'Suspension / ride' },
-          { value: 'other', label: 'Not sure' },
-        ],
-      },
+      question_intent: 'symptom_location',
       rationale: 'Locate the symptom area.',
     },
     {
       id: 'q_stub_2',
       prompt: 'When does it happen?',
-      ui: {
-        type: 'single_select',
-        options: [
-          { value: 'braking', label: 'Braking' },
-          { value: 'turning', label: 'Turning' },
-          { value: 'accelerating', label: 'Accelerating' },
-          { value: 'always', label: 'All the time' },
-        ],
-      },
+      question_intent: 'symptom_timing',
       rationale: 'Timing narrows causes.',
     },
     {
       id: 'q_stub_3',
       prompt: 'How long has this been going on?',
-      ui: {
-        type: 'single_select',
-        options: [
-          { value: 'just-started', label: 'Just started' },
-          { value: 'few-days', label: 'A few days' },
-          { value: 'weeks', label: 'A few weeks' },
-          { value: 'months', label: 'Months' },
-        ],
-      },
+      question_intent: 'symptom_duration',
       rationale: 'Duration affects urgency.',
     },
   ],
@@ -58,21 +33,13 @@ const ROUND2 = {
     {
       id: 'q_stub_4',
       prompt: 'Describe the sound or feeling in your own words.',
-      ui: { type: 'natural_language', placeholder: 'e.g. high pitched squeal when I brake' },
+      question_intent: 'freeform_description',
       rationale: 'Exact customer language for the brief.',
     },
     {
       id: 'q_stub_5',
       prompt: 'Any warning lights on the dashboard?',
-      ui: {
-        type: 'single_select',
-        options: [
-          { value: 'none', label: 'No warning lights' },
-          { value: 'check-engine', label: 'Check engine light' },
-          { value: 'abs', label: 'ABS / brake light' },
-          { value: 'other', label: 'Some other light' },
-        ],
-      },
+      question_intent: 'warning_lights',
       rationale: 'Warning lights escalate urgency.',
     },
   ],
@@ -105,7 +72,10 @@ function mapToMockIntake(messages, media) {
   const category = answers.q_stub_1?.value || 'brakes'
   const timing = answers.q_stub_2?.value || 'braking'
   const duration = answers.q_stub_3?.value || 'weeks'
-  const warningLight = answers.q_stub_5?.value || 'none'
+  const warningLight =
+    Array.isArray(answers.q_stub_5?.value) && answers.q_stub_5.value.length
+      ? answers.q_stub_5.value[0]
+      : answers.q_stub_5?.value || 'none'
   const notes = answers.q_stub_4?.value || collectText(messages, media)
 
   const descriptorByCategory = {
@@ -114,6 +84,12 @@ function mapToMockIntake(messages, media) {
     steering: 'vibration',
     suspension: 'clunk',
     other: 'unsure',
+    'front-left': 'squeal',
+    'front-right': 'squeal',
+    rear: 'clunk',
+    'under-hood': 'knock',
+    'inside-cabin': 'unsure',
+    'not-sure': 'unsure',
   }
 
   const lower = String(notes).toLowerCase()
@@ -125,7 +101,7 @@ function mapToMockIntake(messages, media) {
   else if (lower.includes('vibrat')) descriptor = 'vibration'
 
   return {
-    category,
+    category: category.includes('-') ? 'brakes' : category,
     descriptor,
     timing,
     duration,
@@ -171,8 +147,14 @@ export function isStubMode() {
 }
 
 export async function stubInterviewer(payload) {
-  const { conversation = [], force_done: forceDone } = payload
+  const { conversation = [], force_done: forceDone, vehicle } = payload
   if (forceDone) return { type: 'done' }
+
+  // vehicle is accepted for future stub branching; logged in dev only
+  if (import.meta.env.DEV && vehicle) {
+    // eslint-disable-next-line no-console
+    console.debug('[stub] interviewer vehicle:', vehicle)
+  }
 
   const batches = conversation.filter(
     (m) => m.role === 'interviewer' && m.content?.type === 'question_batch'
@@ -185,6 +167,10 @@ export async function stubInterviewer(payload) {
 
 export async function stubDiagnosticianHypothesis(payload) {
   const round = payload.round ?? 1
+  if (payload.vehicle && import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.debug('[stub] hypothesis vehicle:', payload.vehicle)
+  }
   if (round === 1) {
     return {
       type: 'hypothesis',
@@ -212,4 +198,27 @@ export async function stubDiagnosticianHypothesis(payload) {
 export async function stubDiagnosticianFinal(payload) {
   const mockIntake = mapToMockIntake(payload.conversation ?? [], payload.media_summary)
   return mockToFinalBrief(mockIntake, payload.media_summary)
+}
+
+/** Emit partial brief fields for progressive UI in stub mode. */
+export async function* stubDiagnosticianFinalStream(payload) {
+  const brief = await stubDiagnosticianFinal(payload)
+  const order = [
+    ['category', brief.category],
+    ['urgency', brief.urgency],
+    ['urgencyLabel', brief.urgencyLabel],
+    ['probableCauses', brief.probableCauses],
+    ['componentsToInspect', brief.componentsToInspect],
+    ['estimateRange', brief.estimateRange],
+    ['symptomLanguage', brief.symptomLanguage],
+    ['disclaimer', brief.disclaimer],
+    ['inputs', brief.inputs],
+  ]
+  const partial = { type: 'final' }
+  for (const [key, value] of order) {
+    partial[key] = value
+    yield { ...partial }
+    await new Promise((r) => setTimeout(r, 120))
+  }
+  yield brief
 }

@@ -138,11 +138,15 @@ Deploy:
 ```bash
 supabase secrets set OPENAI_API_KEY=sk-...
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY=...
-# Optional — defaults to OpenAI gpt-4o:
+# Model swap (no code deploy required):
+supabase secrets set INTERVIEWER_MODEL_ID=gpt-4o-mini
+supabase secrets set DIAGNOSTICIAN_MODEL_ID=gpt-4o
+# Optional custom Diagnostician endpoint:
 # supabase secrets set DIAGNOSTICIAN_API_URL=...
 # supabase secrets set DIAGNOSTICIAN_API_KEY=...
 
 supabase functions deploy llm-proxy
+supabase functions deploy export-training-data
 ```
 
 ### Intents
@@ -159,11 +163,32 @@ supabase functions deploy llm-proxy
 
 Every LLM response is validated in the Edge Function (Zod via Deno). On validation failure: retry once with schema in the system message; second failure returns a structured error to the client. Unvalidated LLM output is never returned.
 
-### Diagnostician model swap
+### Diagnostician / Interviewer model swap
 
-<!-- TODO: Replace DIAGNOSTICIAN_API_URL / DIAGNOSTICIAN_API_KEY with the fine-tuned Diagnostician model endpoint trained on intake_messages + intakes.brief + intake_ratings. -->
+Both models are swappable at deploy time via Edge Function secrets — no code deploy required:
 
-Default: OpenAI `gpt-4o`. Interviewer uses `gpt-4o-mini`.
+```bash
+supabase secrets set INTERVIEWER_MODEL_ID=gpt-4o-mini
+supabase secrets set DIAGNOSTICIAN_MODEL_ID=gpt-4o
+# Fine-tuned swap when ready:
+supabase secrets set DIAGNOSTICIAN_MODEL_ID=ft:gpt-4o-2024-07:greenlit:diagnostician-v1:abc123
+```
+
+Default: Interviewer `gpt-4o-mini`, Diagnostician `gpt-4o`. Optional `DIAGNOSTICIAN_API_URL` / `DIAGNOSTICIAN_API_KEY` for custom endpoints.
+
+### Training data export
+
+Edge Function `export-training-data` returns JSONL of outcome-rated intakes (service-role auth only):
+
+```bash
+curl -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  "$SUPABASE_URL/functions/v1/export-training-data" \
+  -o greenlit-training.jsonl
+```
+
+### Final brief streaming
+
+`diagnostician_final` with `payload.stream: true` returns NDJSON partial updates for progressive UI render on the brief page.
 
 ### Media passed to LLMs (v2)
 
@@ -213,6 +238,7 @@ npm run build                   # runs sync first
 ## Migrations
 
 - `0001_initial_schema.sql` — initial schema (locked; do not edit after landing)
+- `0002_v21_vehicle_annotations.sql` — vehicle jsonb, intake_annotations, user_roles
 - Future changes: `0002_*.sql`, `0003_*.sql`, etc.
 
 ```bash

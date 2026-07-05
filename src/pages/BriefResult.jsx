@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useParams, Link, useLocation } from 'react-router-dom'
 import { jsPDF } from 'jspdf'
-import { Download, ShieldAlert, ShieldQuestion, ShieldCheck, FileText, ArrowRight } from 'lucide-react'
+import { Download, ShieldAlert, ShieldQuestion, ShieldCheck, FileText, ArrowRight, Loader2 } from 'lucide-react'
 import { getIntake } from '../lib/db'
+import { runDiagnosticianFinalStream } from '../lib/ai/client'
 import DownloadAppButton from '../components/DownloadAppButton'
 
 const URGENCY_STYLE = {
@@ -13,26 +14,62 @@ const URGENCY_STYLE = {
 
 export default function BriefResult() {
   const { id } = useParams()
+  const location = useLocation()
+  const generatingRef = useRef(false)
+
   const [intake, setIntake] = useState(null)
   const [brief, setBrief] = useState(null)
+  const [generating, setGenerating] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
+    const generatePayload = location.state?.generate ? location.state.payload : null
+
+    if (generatePayload && !generatingRef.current) {
+      generatingRef.current = true
+      setGenerating(true)
+      setError(null)
+
+      runDiagnosticianFinalStream(id, generatePayload, (partial) => {
+        setBrief((prev) => ({ ...(prev ?? {}), ...partial }))
+      })
+        .then(async () => {
+          const data = await getIntake(id)
+          setIntake(data.intake)
+          setBrief(data.intake.brief)
+          setGenerating(false)
+        })
+        .catch((err) => {
+          setError(err.message || 'Failed to generate brief')
+          setGenerating(false)
+        })
+      return
+    }
+
     getIntake(id)
       .then((data) => {
         setIntake(data.intake)
         setBrief(data.intake.brief)
       })
       .catch((err) => setError(err.message))
-  }, [id])
+  }, [id, location.state])
 
-  if (error || !intake || !brief) {
+  if (error) {
     return (
       <div className="mx-auto max-w-2xl px-6 py-20 text-center">
-        <p className="text-text-dim">{error || "We couldn't find that brief."}</p>
+        <p className="text-text-dim">{error}</p>
         <Link to="/intake" className="mt-4 inline-block text-brand">
           Start a new intake
         </Link>
+      </div>
+    )
+  }
+
+  if (!brief) {
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-20 text-center text-text-dim">
+        <Loader2 className="mx-auto mb-3 animate-spin" size={24} />
+        <p>Generating your mechanic brief…</p>
       </div>
     )
   }
@@ -52,24 +89,32 @@ export default function BriefResult() {
     }
 
     line('GREENLIT — Mechanic Brief', 18, 10, [76, 175, 107])
-    line(new Date(intake.created_at).toLocaleString(), 9, 8, [120, 120, 120])
+    if (intake?.created_at) {
+      line(new Date(intake.created_at).toLocaleString(), 9, 8, [120, 120, 120])
+    }
     y += 2
     line(`Category: ${brief.category}`, 12, 8)
-    line(`Urgency: ${brief.urgencyLabel}`, 12, 8)
+    if (brief.urgencyLabel) line(`Urgency: ${brief.urgencyLabel}`, 12, 8)
     y += 4
-    line('Ranked probable causes', 13, 8, [76, 175, 107])
-    brief.probableCauses.forEach((c) => line(`- ${c.cause}  (${c.confidence}% confidence)`, 11, 7))
-    y += 2
-    line('Components to inspect first', 13, 8, [76, 175, 107])
-    brief.componentsToInspect.forEach((c) => line(`- ${c}`, 11, 7))
-    y += 2
-    line(`Estimated repair range: $${brief.estimateRange[0]} - $${brief.estimateRange[1]}`, 11, 7)
-    y += 2
+    if (brief.probableCauses?.length) {
+      line('Ranked probable causes', 13, 8, [76, 175, 107])
+      brief.probableCauses.forEach((c) => line(`- ${c.cause}  (${c.confidence}% confidence)`, 11, 7))
+      y += 2
+    }
+    if (brief.componentsToInspect?.length) {
+      line('Components to inspect first', 13, 8, [76, 175, 107])
+      brief.componentsToInspect.forEach((c) => line(`- ${c}`, 11, 7))
+      y += 2
+    }
+    if (brief.estimateRange) {
+      line(`Estimated repair range: $${brief.estimateRange[0]} - $${brief.estimateRange[1]}`, 11, 7)
+      y += 2
+    }
     if (brief.symptomLanguage?.length) {
       line('Customer-reported context', 13, 8, [76, 175, 107])
       brief.symptomLanguage.forEach((s) => line(s, 10, 7, [90, 90, 90]))
     }
-    if (intake.customer_name) {
+    if (intake?.customer_name) {
       y += 4
       line(`Submitted by: ${intake.customer_name}`, 10, 7, [120, 120, 120])
     }
@@ -78,52 +123,78 @@ export default function BriefResult() {
       line(brief.disclaimer, 9, 6, [120, 120, 120])
     }
 
-    doc.save(`greenlit-brief-${intake.id}.pdf`)
+    doc.save(`greenlit-brief-${id}.pdf`)
   }
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-12">
+      {generating && (
+        <p className="mb-4 flex items-center gap-2 text-sm text-text-dim">
+          <Loader2 size={14} className="animate-spin" /> Building your brief…
+        </p>
+      )}
+
       <p className="text-sm font-medium uppercase tracking-wide text-brand">Mechanic brief ready</p>
-      <h1 className="mt-2 text-3xl font-semibold text-text">{brief.category}</h1>
-      <p className="mt-1 text-sm text-text-dim">
-        Generated {new Date(intake.created_at).toLocaleString()}
-      </p>
 
-      <div className={`mt-6 flex items-center gap-3 rounded-xl border ${style.border} ${style.bg} px-4 py-3`}>
-        <UrgencyIcon size={20} className={style.color} />
-        <div>
-          <p className={`font-medium ${style.color}`}>{brief.urgencyLabel}</p>
-          <p className="text-xs text-text-dim">
-            Estimated repair range: ${brief.estimateRange[0]}–${brief.estimateRange[1]}
-          </p>
+      {intake?.vehicle && (
+        <p className="mt-2 text-xs text-text-mute">
+          {intake.vehicle.year} {intake.vehicle.make} {intake.vehicle.model}
+          {intake.vehicle.mileage != null ? ` · ${intake.vehicle.mileage.toLocaleString()} mi` : ''}
+        </p>
+      )}
+
+      {brief.category && (
+        <>
+          <h1 className="mt-2 text-3xl font-semibold text-text">{brief.category}</h1>
+          {intake?.created_at && (
+            <p className="mt-1 text-sm text-text-dim">
+              Generated {new Date(intake.created_at).toLocaleString()}
+            </p>
+          )}
+        </>
+      )}
+
+      {brief.urgency && brief.urgencyLabel && brief.estimateRange && (
+        <div className={`mt-6 flex items-center gap-3 rounded-xl border ${style.border} ${style.bg} px-4 py-3`}>
+          <UrgencyIcon size={20} className={style.color} />
+          <div>
+            <p className={`font-medium ${style.color}`}>{brief.urgencyLabel}</p>
+            <p className="text-xs text-text-dim">
+              Estimated repair range: ${brief.estimateRange[0]}–${brief.estimateRange[1]}
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
-      <Section title="Ranked probable causes">
-        <div className="space-y-3">
-          {brief.probableCauses.map((c) => (
-            <div key={c.cause} className="rounded-xl border border-line bg-panel p-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-text">{c.cause}</span>
-                <span className="text-text-dim">{c.confidence}%</span>
+      {brief.probableCauses?.length > 0 && (
+        <Section title="Ranked probable causes">
+          <div className="space-y-3">
+            {brief.probableCauses.map((c) => (
+              <div key={c.cause} className="rounded-xl border border-line bg-panel p-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-text">{c.cause}</span>
+                  <span className="text-text-dim">{c.confidence}%</span>
+                </div>
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line">
+                  <div className="h-full rounded-full bg-brand" style={{ width: `${c.confidence}%` }} />
+                </div>
               </div>
-              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line">
-                <div className="h-full rounded-full bg-brand" style={{ width: `${c.confidence}%` }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </Section>
+            ))}
+          </div>
+        </Section>
+      )}
 
-      <Section title="Components to inspect first">
-        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {brief.componentsToInspect.map((c) => (
-            <li key={c} className="rounded-lg border border-line bg-panel px-3 py-2 text-sm text-text/80">
-              {c}
-            </li>
-          ))}
-        </ul>
-      </Section>
+      {brief.componentsToInspect?.length > 0 && (
+        <Section title="Components to inspect first">
+          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {brief.componentsToInspect.map((c) => (
+              <li key={c} className="rounded-lg border border-line bg-panel px-3 py-2 text-sm text-text/80">
+                {c}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
 
       {brief.symptomLanguage?.length > 0 && (
         <Section title="Exactly what the customer reported">
@@ -151,22 +222,24 @@ export default function BriefResult() {
         <p className="mt-8 text-xs text-text-mute">{brief.disclaimer}</p>
       )}
 
-      <div className="mt-10 flex flex-wrap gap-3">
-        <button
-          onClick={downloadPdf}
-          className="inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-ink hover:bg-brand-dim"
-        >
-          <Download size={16} />
-          Download brief as PDF
-        </button>
-        <Link
-          to="/intake"
-          className="inline-flex items-center gap-2 rounded-xl border border-line px-5 py-3 text-sm font-medium text-text/80 hover:border-brand/50"
-        >
-          <FileText size={16} />
-          New intake
-        </Link>
-      </div>
+      {!generating && (
+        <div className="mt-10 flex flex-wrap gap-3">
+          <button
+            onClick={downloadPdf}
+            className="inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-ink hover:bg-brand-dim"
+          >
+            <Download size={16} />
+            Download brief as PDF
+          </button>
+          <Link
+            to="/intake"
+            className="inline-flex items-center gap-2 rounded-xl border border-line px-5 py-3 text-sm font-medium text-text/80 hover:border-brand/50"
+          >
+            <FileText size={16} />
+            New intake
+          </Link>
+        </div>
+      )}
 
       <div className="mt-6 rounded-xl border border-line bg-panel/60 p-5">
         <p className="text-sm text-text-dim">
@@ -177,7 +250,7 @@ export default function BriefResult() {
         </div>
       </div>
 
-      {intake.shop_id && (
+      {intake?.shop_id && (
         <p className="mt-6 flex items-center gap-1 text-sm text-text-dim">
           This brief has been sent ahead to the shop for your appointment.
           <ArrowRight size={14} />

@@ -54,11 +54,66 @@ export const UISchema = z.discriminatedUnion('type', [
   MediaRequestUISchema,
 ])
 
+export const MediaSummaryItemSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('audio'), duration_seconds: z.number().optional(), media_id: z.string().uuid() }),
+  z.object({ kind: z.literal('video'), media_id: z.string().uuid() }),
+  z.object({ kind: z.literal('photo'), media_id: z.string().uuid() }),
+  z.object({ kind: z.literal('text'), text_content: z.string() }),
+])
+
+export const VehicleSchema = z.object({
+  year: z.number().int().min(1980).max(new Date().getFullYear() + 1),
+  make: z.string().min(1),
+  model: z.string().min(1),
+  mileage: z.number().int().min(0).nullable().optional(),
+  trim: z.string().nullable().optional(),
+})
+
+export const QuestionIntentSchema = z.enum([
+  'symptom_timing',
+  'symptom_location',
+  'symptom_duration',
+  'symptom_frequency',
+  'pedal_feel',
+  'steering_feel',
+  'vibration_intensity',
+  'vibration_location',
+  'warning_lights',
+  'visible_damage',
+  'sound_capture',
+  'motion_capture',
+  'safety_confirmation',
+  'freeform_description',
+])
+
+/** LLM output — ui is derived client-side via uiRules.js */
+export const InterviewerQuestionSchema = z.object({
+  id: z.string(),
+  prompt: z.string(),
+  question_intent: QuestionIntentSchema,
+  rationale: z.string(),
+})
+
+/** Stored/rendered question — includes derived ui (or legacy ui-only records) */
 export const QuestionSchema = z.object({
   id: z.string(),
   prompt: z.string(),
+  question_intent: QuestionIntentSchema.optional(),
   ui: UISchema,
   rationale: z.string(),
+})
+
+export const LlmPayloadSchema = z.object({
+  round: z.number().int().min(1).max(3).optional(),
+  vehicle: VehicleSchema.nullable().optional(),
+  media_summary: z.array(MediaSummaryItemSchema).optional(),
+  conversation: z.array(z.object({ role: z.string(), content: z.unknown() })).optional(),
+})
+
+export const LlmQuestionBatchSchema = z.object({
+  type: z.literal('question_batch'),
+  round: z.number().int().min(1).max(3),
+  questions: z.array(InterviewerQuestionSchema).min(1).max(3),
 })
 
 export const QuestionBatchSchema = z.object({
@@ -70,6 +125,12 @@ export const QuestionBatchSchema = z.object({
 export const InterviewerDoneSchema = z.object({
   type: z.literal('done'),
 })
+
+/** Raw LLM interviewer output (no ui field) */
+export const LlmInterviewerResponseSchema = z.discriminatedUnion('type', [
+  LlmQuestionBatchSchema,
+  InterviewerDoneSchema,
+])
 
 export const InterviewerResponseSchema = z.discriminatedUnion('type', [
   QuestionBatchSchema,
@@ -136,13 +197,6 @@ export const SystemEventSchema = z.object({
   round: z.number().int().optional(),
   details: z.record(z.unknown()).optional(),
 })
-
-export const MediaSummaryItemSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('audio'), duration_seconds: z.number().optional(), media_id: z.string().uuid() }),
-  z.object({ kind: z.literal('video'), media_id: z.string().uuid() }),
-  z.object({ kind: z.literal('photo'), media_id: z.string().uuid() }),
-  z.object({ kind: z.literal('text'), text_content: z.string() }),
-])
 
 export function formatZodError(error) {
   return error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ')

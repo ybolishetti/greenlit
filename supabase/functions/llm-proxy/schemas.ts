@@ -53,11 +53,57 @@ export const UISchema = z.discriminatedUnion('type', [
   MediaRequestUISchema,
 ])
 
+export const MediaSummaryItemSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('audio'), duration_seconds: z.number().optional(), media_id: z.string().uuid() }),
+  z.object({ kind: z.literal('video'), media_id: z.string().uuid() }),
+  z.object({ kind: z.literal('photo'), media_id: z.string().uuid() }),
+  z.object({ kind: z.literal('text'), text_content: z.string() }),
+])
+
+export const VehicleSchema = z.object({
+  year: z.number().int().min(1980).max(new Date().getFullYear() + 1),
+  make: z.string().min(1),
+  model: z.string().min(1),
+  mileage: z.number().int().min(0).nullable().optional(),
+  trim: z.string().nullable().optional(),
+})
+
+export const QuestionIntentSchema = z.enum([
+  'symptom_timing',
+  'symptom_location',
+  'symptom_duration',
+  'symptom_frequency',
+  'pedal_feel',
+  'steering_feel',
+  'vibration_intensity',
+  'vibration_location',
+  'warning_lights',
+  'visible_damage',
+  'sound_capture',
+  'motion_capture',
+  'safety_confirmation',
+  'freeform_description',
+])
+
+export const InterviewerQuestionSchema = z.object({
+  id: z.string(),
+  prompt: z.string(),
+  question_intent: QuestionIntentSchema,
+  rationale: z.string(),
+})
+
 export const QuestionSchema = z.object({
   id: z.string(),
   prompt: z.string(),
+  question_intent: QuestionIntentSchema.optional(),
   ui: UISchema,
   rationale: z.string(),
+})
+
+export const LlmQuestionBatchSchema = z.object({
+  type: z.literal('question_batch'),
+  round: z.number().int().min(1).max(3),
+  questions: z.array(InterviewerQuestionSchema).min(1).max(3),
 })
 
 export const QuestionBatchSchema = z.object({
@@ -69,6 +115,11 @@ export const QuestionBatchSchema = z.object({
 export const InterviewerDoneSchema = z.object({
   type: z.literal('done'),
 })
+
+export const LlmInterviewerResponseSchema = z.discriminatedUnion('type', [
+  LlmQuestionBatchSchema,
+  InterviewerDoneSchema,
+])
 
 export const InterviewerResponseSchema = z.discriminatedUnion('type', [
   QuestionBatchSchema,
@@ -113,7 +164,7 @@ export function formatZodError(error: z.ZodError) {
 export function getSchemaForIntent(intent: string) {
   switch (intent) {
     case 'interviewer':
-      return InterviewerResponseSchema
+      return LlmInterviewerResponseSchema
     case 'diagnostician_hypothesis':
       return HypothesisSchema
     case 'diagnostician_final':
@@ -126,7 +177,7 @@ export function getSchemaForIntent(intent: string) {
 export function schemaHintForIntent(intent: string): string {
   switch (intent) {
     case 'interviewer':
-      return '{"type":"question_batch","round":1,"questions":[{"id":"q_1","prompt":"...","ui":{"type":"single_select","options":[{"value":"a","label":"A"}]},"rationale":"..."}]} OR {"type":"done"}'
+      return '{"type":"question_batch","round":1,"questions":[{"id":"q_1","prompt":"...","question_intent":"symptom_timing","rationale":"..."}]} OR {"type":"done"}'
     case 'diagnostician_hypothesis':
       return '{"type":"hypothesis","round":1,"confidence":0.5,"needs_more_info":["..."],"top_causes":[{"cause":"...","confidence":0.3}]}'
     case 'diagnostician_final':

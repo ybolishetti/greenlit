@@ -7,6 +7,7 @@ import BriefResult from './pages/BriefResult'
 import ShopLanding from './pages/ShopLanding'
 import ShopDashboard from './pages/ShopDashboard'
 import IntakeDebug from './pages/dev/IntakeDebug'
+import AnnotationTool from './pages/dev/AnnotationTool'
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
           <Route path="/shop/:shopId" element={<ShopLanding />} />
           <Route path="/shop/:shopId/dashboard" element={<ShopDashboard />} />
           <Route path="/dev/intake/:id" element={<IntakeDebug />} />
+          <Route path="/dev/annotate" element={<AnnotationTool />} />
         </Routes>
       </main>
       <footer className="border-t border-line/60 py-8 text-center text-xs text-text-mute">

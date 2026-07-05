@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowRight, Loader2 } from 'lucide-react'
+import VehicleForm from '../../components/intake/VehicleForm'
 import InputPicker from '../../components/InputPicker'
 import AudioRecorder from '../../components/AudioRecorder'
 import VideoRecorder from '../../components/VideoRecorder'
@@ -14,6 +15,8 @@ export default function IntakeNew() {
   const [params] = useSearchParams()
   const shopSlug = params.get('shop')
 
+  const [step, setStep] = useState(1)
+  const [vehicle, setVehicle] = useState(null)
   const [modality, setModality] = useState(null)
   const [audioBlob, setAudioBlob] = useState(null)
   const [videoBlob, setVideoBlob] = useState(null)
@@ -32,10 +35,11 @@ export default function IntakeNew() {
   }
 
   const submit = async () => {
+    if (!vehicle) return
     setSubmitting(true)
     setError(null)
     try {
-      const intake = await createIntake({ shopSlug })
+      const intake = await createIntake({ shopSlug, vehicle })
       await appendMessage(intake.id, 'system', { type: 'system_event', event: 'intake_started' })
       if (isStubMode()) {
         await appendMessage(intake.id, 'system', { type: 'system_event', event: 'stub_mode' })
@@ -72,50 +76,83 @@ export default function IntakeNew() {
         </div>
       )}
 
-      <h1 className="text-2xl font-semibold text-text">How would you like to describe the problem?</h1>
-      <p className="mt-1 text-sm text-text-dim">Pick one to start — you can add more detail in follow-up questions.</p>
-
-      <div className="mt-8">
-        <InputPicker value={modality} onChange={setModality} />
-      </div>
-
-      {modality && (
-        <div className="mt-8">
-          {modality === 'audio' && <AudioRecorder onCapture={setAudioBlob} />}
-          {modality === 'video' && <VideoRecorder onCapture={setVideoBlob} />}
-          {modality === 'photo' && <PhotoUpload onCapture={(files) => setPhotoFile(files?.[0] ?? null)} single />}
-          {modality === 'text' && (
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              rows={6}
-              placeholder="e.g. It makes a grinding noise when I brake at highway speed, especially when it's cold."
-              className="w-full rounded-xl border border-line bg-panel p-4 text-sm text-text placeholder:text-text-mute focus:border-brand/50 focus:outline-none"
+      {step === 1 && (
+        <>
+          <h1 className="text-2xl font-semibold text-text">Start your intake</h1>
+          <p className="mt-1 text-sm text-text-dim">First, tell us about your vehicle.</p>
+          <div className="mt-8">
+            <VehicleForm
+              submitting={submitting}
+              onSubmit={(v) => {
+                setVehicle(v)
+                setStep(2)
+              }}
             />
-          )}
-        </div>
+          </div>
+        </>
       )}
 
-      <ErrorBanner message={error} onRetry={submit} />
+      {step === 2 && vehicle && (
+        <>
+          <p className="text-xs uppercase tracking-wide text-text-mute">
+            {vehicle.year} {vehicle.make} {vehicle.model}
+            {vehicle.mileage != null ? ` · ${vehicle.mileage.toLocaleString()} mi` : ''}
+          </p>
+          <h1 className="mt-2 text-2xl font-semibold text-text">How would you like to describe the problem?</h1>
+          <p className="mt-1 text-sm text-text-dim">Pick one to start — you can add more detail in follow-up questions.</p>
 
-      <div className="mt-10 flex justify-end">
-        <button
-          type="button"
-          disabled={!canSubmit() || submitting}
-          onClick={submit}
-          className="inline-flex items-center gap-2 rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-ink hover:bg-brand-dim disabled:opacity-40"
-        >
-          {submitting ? (
-            <>
-              <Loader2 size={16} className="animate-spin" /> Starting…
-            </>
-          ) : (
-            <>
-              Continue <ArrowRight size={16} />
-            </>
+          <div className="mt-8">
+            <InputPicker value={modality} onChange={setModality} />
+          </div>
+
+          {modality && (
+            <div className="mt-8">
+              {modality === 'audio' && <AudioRecorder onCapture={setAudioBlob} />}
+              {modality === 'video' && <VideoRecorder onCapture={setVideoBlob} />}
+              {modality === 'photo' && (
+                <PhotoUpload onCapture={(files) => setPhotoFile(files?.[0] ?? null)} single />
+              )}
+              {modality === 'text' && (
+                <textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  rows={6}
+                  placeholder="e.g. It makes a grinding noise when I brake at highway speed, especially when it's cold."
+                  className="w-full rounded-xl border border-line bg-panel p-4 text-sm text-text placeholder:text-text-mute focus:border-brand/50 focus:outline-none"
+                />
+              )}
+            </div>
           )}
-        </button>
-      </div>
+
+          <ErrorBanner message={error} onRetry={submit} />
+
+          <div className="mt-10 flex justify-between">
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className="text-sm text-text-dim hover:text-text"
+            >
+              ← Edit vehicle
+            </button>
+            <button
+              type="button"
+              disabled={!canSubmit() || submitting}
+              onClick={submit}
+              className="inline-flex items-center gap-2 rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-ink hover:bg-brand-dim disabled:opacity-40"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" /> Starting…
+                </>
+              ) : (
+                <>
+                  Continue <ArrowRight size={16} />
+                </>
+              )}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }

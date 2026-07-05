@@ -11,11 +11,11 @@ import {
   uploadMedia,
 } from '../../lib/db'
 import {
-  runDiagnosticianFinal,
   runDiagnosticianHypothesis,
   runInterviewer,
   isStubMode,
 } from '../../lib/ai/client'
+import { enrichQuestionBatch } from '../../lib/intake/uiRules.js'
 import {
   countQuestionsAsked,
   getCurrentRound,
@@ -35,6 +35,15 @@ function buildMediaSummary(media) {
 
 function buildConversation(messages) {
   return messages.map((m) => ({ role: m.role, content: m.content }))
+}
+
+function buildLlmPayload(bundle) {
+  return {
+    round: getCurrentRound(bundle.messages),
+    vehicle: bundle.intake.vehicle ?? null,
+    media_summary: buildMediaSummary(bundle.media),
+    conversation: buildConversation(bundle.messages),
+  }
 }
 
 export default function IntakeSession() {
@@ -65,29 +74,31 @@ export default function IntakeSession() {
 
   const requestInterviewer = async (bundle) => {
     const msgs = bundle.messages
-    const med = bundle.media
     const round = getCurrentRound(msgs)
     await appendMessage(id, 'system', { type: 'system_event', event: 'round_start', round })
     const response = await runInterviewer(id, {
-      round,
+      ...buildLlmPayload(bundle),
       total_questions_asked: countQuestionsAsked(msgs),
       force_done: shouldForceDone(msgs),
       last_hypothesis: getLastHypothesis(msgs),
-      media_summary: buildMediaSummary(med),
-      conversation: buildConversation(msgs),
     })
     await appendMessage(id, 'interviewer', response)
     return response
   }
 
+  /**
+   * Diagnostician firing cadence (v2.1 — do not change without architecture review):
+   *
+   * The Diagnostician runs ONCE PER CYCLE (after the user submits a question batch),
+   * not once per individual question. This mirrors how mechanics integrate a chunk of
+   * new evidence before re-hypothesizing, and keeps latency/cost bounded.
+   *
+   * Do NOT "optimize" this into per-question Diagnostician calls — batching is intentional.
+   */
   const runDiagnosticianRound = async (bundle) => {
     const round = getCurrentRound(bundle.messages)
     await appendMessage(id, 'system', { type: 'system_event', event: 'round_end', round })
-    const hypothesis = await runDiagnosticianHypothesis(id, {
-      round,
-      media_summary: buildMediaSummary(bundle.media),
-      conversation: buildConversation(bundle.messages),
-    })
+    const hypothesis = await runDiagnosticianHypothesis(id, buildLlmPayload(bundle))
     await appendMessage(id, 'diagnostician', hypothesis)
     return hypothesis
   }
@@ -103,14 +114,15 @@ export default function IntakeSession() {
     try {
       if (customerName.trim()) await updateCustomerName(id, customerName.trim())
       const data = await fetchAndApply()
-      await runDiagnosticianFinal(id, {
-        round: getCurrentRound(data.messages),
-        media_summary: buildMediaSummary(data.media),
-        conversation: buildConversation(data.messages),
+      navigate(`/brief/${id}`, {
+        replace: true,
+        state: {
+          generate: true,
+          payload: buildLlmPayload(data),
+        },
       })
-      navigate(`/brief/${id}`, { replace: true })
     } catch (err) {
-      setError(err.message || 'Failed to generate brief')
+      setError(err.message || 'Failed to start brief generation')
       setProcessing(false)
     }
   }
@@ -198,7 +210,7 @@ export default function IntakeSession() {
           const idx = msgs.indexOf(lastInterviewer)
           const hasAnswersAfter = msgs.slice(idx + 1).some((m) => m.role === 'user')
           if (!hasAnswersAfter) {
-            setActiveBatch(lastInterviewer.content)
+            setActiveBatch(enrichQuestionBatch(lastInterviewer.content))
             return
           }
         }
@@ -230,6 +242,13 @@ export default function IntakeSession() {
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-12">
+      {intake?.vehicle && (
+        <p className="mb-4 text-xs text-text-mute">
+          {intake.vehicle.year} {intake.vehicle.make} {intake.vehicle.model}
+          {intake.vehicle.mileage != null ? ` · ${intake.vehicle.mileage.toLocaleString()} mi` : ''}
+        </p>
+      )}
+
       <ConversationProgress messages={messages} />
 
       {isStubMode() && (

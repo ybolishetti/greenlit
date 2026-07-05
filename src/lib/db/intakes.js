@@ -28,14 +28,14 @@ export async function getShopBySlug(slug) {
   return data
 }
 
-export async function createIntake({ shopSlug } = {}) {
-  if (!isSupabaseConfigured) return memoryCreateIntake({ shopSlug })
+export async function createIntake({ shopSlug, vehicle } = {}) {
+  if (!isSupabaseConfigured) return memoryCreateIntake({ shopSlug, vehicle })
   const sb = requireSupabase()
   const shopId = shopSlug ? await resolveShopId(shopSlug) : null
   const { data, error } = await sb
     .from('intakes')
-    .insert({ shop_id: shopId })
-    .select('id, shop_id, status, created_at')
+    .insert({ shop_id: shopId, vehicle: vehicle ?? null })
+    .select('id, shop_id, status, vehicle, created_at')
     .single()
   if (error) throw error
   return data

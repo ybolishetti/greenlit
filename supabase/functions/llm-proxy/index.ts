@@ -122,6 +122,7 @@ Deno.serve(async (req) => {
     const llmPayload = {
       ...payload,
       round: payload.round ?? 1,
+      vehicle: payload.vehicle ?? bundle.intake.vehicle ?? null,
       media_summary: buildMediaSummary(bundle.media),
       conversation: bundle.messages.map((m: { role: string; content: unknown }) => ({
         role: m.role,
@@ -132,10 +133,11 @@ Deno.serve(async (req) => {
     const systemPrompt = await loadPrompt(intent)
     const model =
       intent === 'interviewer'
-        ? 'gpt-4o-mini'
-        : Deno.env.get('DIAGNOSTICIAN_MODEL') ?? 'gpt-4o'
+        ? Deno.env.get('INTERVIEWER_MODEL_ID') ?? 'gpt-4o-mini'
+        : Deno.env.get('DIAGNOSTICIAN_MODEL_ID') ??
+          Deno.env.get('DIAGNOSTICIAN_MODEL') ??
+          'gpt-4o'
 
-    // TODO: Replace DIAGNOSTICIAN_API_URL with fine-tuned Diagnostician model endpoint.
     const apiUrl = intent === 'interviewer'
       ? 'https://api.openai.com/v1/chat/completions'
       : Deno.env.get('DIAGNOSTICIAN_API_URL') ?? 'https://api.openai.com/v1/chat/completions'
@@ -146,6 +148,20 @@ Deno.serve(async (req) => {
 
     const schema = getSchemaForIntent(intent)!
     const hint = schemaHintForIntent(intent)
+
+    if (intent === 'diagnostician_final' && payload.stream) {
+      await admin.from('llm_call_log').insert({ intake_id: intakeId })
+      return streamDiagnosticianFinal(
+        admin,
+        intakeId!,
+        apiUrl,
+        apiKey,
+        model,
+        systemPrompt,
+        llmPayload,
+        hint
+      )
+    }
 
     let raw = await callOpenAi(apiUrl, apiKey, model, systemPrompt, llmPayload)
     let parsed: unknown
@@ -214,7 +230,7 @@ async function callOpenAi(
   retryNote?: string
 ): Promise<unknown> {
   const userContent = retryNote
-    ? JSON.stringify({ ...userPayload as object, validation_error: retryNote })
+    ? JSON.stringify({ ...(userPayload as object), validation_error: retryNote })
     : JSON.stringify(userPayload)
 
   const res = await fetch(apiUrl, {
@@ -245,6 +261,214 @@ async function callOpenAi(
   return JSON.parse(content)
 }
 
+function extractPartialBrief(text: string): Record<string, unknown> {
+  const partial: Record<string, unknown> = { type: 'final' }
+
+  const stringField = (key: string) => {
+    const m = text.match(new RegExp(`"${key}"\\s*:\\s*"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"`,))
+    if (m) partial[key] = m[1].replace(/\\"/g, '"')
+  }
+
+  stringField('category')
+  stringField('urgency')
+  stringField('urgencyLabel')
+  stringField('disclaimer')
+
+  const estimateMatch = text.match(/"estimateRange"\s*:\s*\[\s*(\d+)\s*,\s*(\d+)\s*\]/)
+  if (estimateMatch) {
+    partial.estimateRange = [Number(estimateMatch[1]), Number(estimateMatch[2])]
+  }
+
+  const causesMatch = text.match(/"probableCauses"\s*:\s*(\[[\s\S]*?\])\s*,\s*"/)
+  if (causesMatch) {
+    try {
+      partial.probableCauses = JSON.parse(causesMatch[1])
+    } catch {
+      /* partial array not yet complete */
+    }
+  }
+
+  const componentsMatch = text.match(/"componentsToInspect"\s*:\s*(\[[\s\S]*?\])\s*,\s*"/)
+  if (componentsMatch) {
+    try {
+      partial.componentsToInspect = JSON.parse(componentsMatch[1])
+    } catch {
+      /* partial array not yet complete */
+    }
+  }
+
+  const symptomMatch = text.match(/"symptomLanguage"\s*:\s*(\[[\s\S]*?\])\s*,\s*"/)
+  if (symptomMatch) {
+    try {
+      partial.symptomLanguage = JSON.parse(symptomMatch[1])
+    } catch {
+      /* partial array not yet complete */
+    }
+  }
+
+  const inputsMatch = text.match(/"inputs"\s*:\s*(\{[\s\S]*?\})/)
+  if (inputsMatch) {
+    try {
+      partial.inputs = JSON.parse(inputsMatch[1])
+    } catch {
+      /* partial object not yet complete */
+    }
+  }
+
+  return partial
+}
+
+function streamDiagnosticianFinal(
+  admin: SupabaseClient,
+  intakeId: string,
+  apiUrl: string,
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  userPayload: unknown,
+  hint: string
+): Response {
+  const encoder = new TextEncoder()
+  let lastPartialKey = ''
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const enqueue = (obj: unknown) => {
+        controller.enqueue(encoder.encode(`${JSON.stringify(obj)}\n`))
+      }
+
+      try {
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            stream: true,
+            response_format: { type: 'json_object' },
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: JSON.stringify(userPayload) },
+            ],
+            temperature: 0.4,
+          }),
+        })
+
+        if (!res.ok) {
+          const text = await res.text()
+          enqueue({ type: 'error', code: 'llm_error', message: text })
+          controller.close()
+          return
+        }
+
+        const reader = res.body!.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let content = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+
+          const lines = buffer.split('\n')
+          buffer = lines.pop() ?? ''
+
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (!trimmed.startsWith('data:')) continue
+            const data = trimmed.slice(5).trim()
+            if (data === '[DONE]') continue
+            try {
+              const parsed = JSON.parse(data)
+              const delta = parsed.choices?.[0]?.delta?.content
+              if (delta) content += delta
+            } catch {
+              /* ignore malformed SSE chunks */
+            }
+          }
+
+          const partial = extractPartialBrief(content)
+          const partialKey = JSON.stringify(partial)
+          if (partialKey !== lastPartialKey && Object.keys(partial).length > 1) {
+            lastPartialKey = partialKey
+            enqueue({ type: 'partial', brief: partial })
+          }
+        }
+
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(content)
+        } catch {
+          enqueue({ type: 'error', code: 'validation_failed', message: 'Invalid JSON from model' })
+          controller.close()
+          return
+        }
+
+        let result = FinalBriefSchema.safeParse(parsed)
+        if (!result.success) {
+          parsed = await callOpenAi(
+            apiUrl,
+            apiKey,
+            model,
+            systemPrompt,
+            userPayload,
+            `Your response failed validation: ${formatZodError(result.error)}. Reply with valid JSON matching this schema: ${hint}`
+          )
+          result = FinalBriefSchema.safeParse(parsed)
+        }
+
+        if (!result.success) {
+          enqueue({
+            type: 'error',
+            code: 'validation_failed',
+            message: formatZodError(result.error),
+          })
+          controller.close()
+          return
+        }
+
+        const brief = result.data
+        const { error: updateError } = await admin
+          .from('intakes')
+          .update({
+            brief,
+            status: 'complete',
+            urgency: brief.urgency,
+            category: brief.category,
+          })
+          .eq('id', intakeId)
+
+        if (updateError) {
+          enqueue({ type: 'error', code: 'brief_persist_failed', message: updateError.message })
+          controller.close()
+          return
+        }
+
+        enqueue({ type: 'complete', result: brief })
+        controller.close()
+      } catch (err) {
+        enqueue({
+          type: 'error',
+          code: 'internal_error',
+          message: err instanceof Error ? err.message : 'Unknown error',
+        })
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'application/x-ndjson',
+      'Cache-Control': 'no-cache',
+    },
+  })
+}
+
 async function isRateLimited(admin: SupabaseClient, intakeId: string): Promise<boolean> {
   const since = new Date(Date.now() - RATE_WINDOW_MINUTES * 60 * 1000).toISOString()
   const { count, error } = await admin
@@ -264,7 +488,7 @@ async function canAccessIntake(
 ): Promise<boolean> {
   const { data: intake, error } = await admin
     .from('intakes')
-    .select('shop_id, created_at')
+    .select('shop_id, created_at, status')
     .eq('id', intakeId)
     .maybeSingle()
 
@@ -272,6 +496,15 @@ async function canAccessIntake(
 
   const createdAt = new Date(intake.created_at).getTime()
   if (Date.now() - createdAt <= 30 * 60 * 1000) return true
+
+  if (userId && (await isAnnotatorOrAdmin(admin, userId))) {
+    const { data: rating } = await admin
+      .from('intake_ratings')
+      .select('intake_id')
+      .eq('intake_id', intakeId)
+      .maybeSingle()
+    if (rating) return true
+  }
 
   if (userId && intake.shop_id) {
     const { data: member } = await admin
@@ -284,6 +517,15 @@ async function canAccessIntake(
   }
 
   return false
+}
+
+async function isAnnotatorOrAdmin(admin: SupabaseClient, userId: string): Promise<boolean> {
+  const { data } = await admin
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', userId)
+    .maybeSingle()
+  return data?.role === 'admin' || data?.role === 'annotator'
 }
 
 async function canCallLlm(

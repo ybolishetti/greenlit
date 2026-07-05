@@ -1,6 +1,6 @@
 # Greenlit Architecture v2.1 — Two-Model Formalization
 
-**Status:** Design locked 2026-07-05, implementation pending
+**Status:** Implemented 2026-07-05 (branch `arch/formalize-two-model-architecture`)
 **Supersedes:** No prior architecture doc; this formalizes design decisions layered onto the v2 codebase
 **Companion files:**
 - `docs/architecture-v2.1-cursor-prompt.md` — implementation task for Cursor (paste this into Cursor to execute)
