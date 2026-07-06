@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Mic, Camera, SlidersHorizontal, MessageSquareText, ArrowRight, ShieldCheck } from 'lucide-react'
 import DownloadAppButton from '../components/DownloadAppButton'
+import { useOpenLogin, useStartIntake } from '../hooks/useIntakeAccess'
 
 const MODALITIES = [
   { icon: Mic, title: 'Audio', desc: 'Record the noise right in your browser, or upload a clip.' },
@@ -16,6 +17,9 @@ const STEPS = [
 ]
 
 export default function Landing() {
+  const startIntake = useStartIntake()
+  const openLogin = useOpenLogin()
+
   return (
     <div>
       <section className="mx-auto max-w-6xl px-6 pt-20 pb-16 text-center">
@@ -31,13 +35,21 @@ export default function Landing() {
           technical language required.
         </p>
         <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
-          <Link
-            to="/intake"
+          <button
+            type="button"
+            onClick={startIntake}
             className="inline-flex items-center gap-2 rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-ink hover:bg-brand-dim transition-colors"
           >
-            Report a problem now
+            Start intake
             <ArrowRight size={16} />
-          </Link>
+          </button>
+          <button
+            type="button"
+            onClick={openLogin}
+            className="inline-flex items-center gap-2 rounded-xl border border-line bg-panel px-6 py-3 text-sm font-medium text-white hover:border-brand/50 transition-colors"
+          >
+            Log in
+          </button>
           <DownloadAppButton />
         </div>
         <p className="mt-4 text-xs text-white/40">

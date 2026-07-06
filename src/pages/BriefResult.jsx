@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, Link, useLocation } from 'react-router-dom'
 import { jsPDF } from 'jspdf'
-import { Download, ShieldAlert, ShieldQuestion, ShieldCheck, FileText, ArrowRight, Loader2 } from 'lucide-react'
-import { getIntake } from '../lib/db'
+import { Download, ShieldAlert, ShieldQuestion, ShieldCheck, FileText, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react'
+import { getIntake, saveConsumerIntake } from '../lib/db'
 import { runDiagnosticianFinalStream } from '../lib/ai/client'
 import DownloadAppButton from '../components/DownloadAppButton'
+import { useAuth } from '../context/AuthContext'
+import { useStartIntake } from '../hooks/useIntakeAccess'
+import { getOrCreateDeviceId, markIntakeSessionUsed, setPendingClaim } from '../lib/deviceId'
 
 const URGENCY_STYLE = {
   immediate: { icon: ShieldAlert, color: 'text-danger', bg: 'bg-danger/10', border: 'border-danger/30' },
@@ -16,11 +19,76 @@ export default function BriefResult() {
   const { id } = useParams()
   const location = useLocation()
   const generatingRef = useRef(false)
+  const persistedRef = useRef(false)
+  const { isSignedIn, openAuthModal } = useAuth()
+  const startIntake = useStartIntake()
 
   const [intake, setIntake] = useState(null)
   const [brief, setBrief] = useState(null)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState(null)
+  const [consumerIntakeId, setConsumerIntakeId] = useState(null)
+  const [savedToAccount, setSavedToAccount] = useState(false)
+
+  const consumerStorageKey = `greenlit_consumer_intake_${id}`
+  const savedStorageKey = `greenlit_saved_${id}`
+
+  useEffect(() => {
+    const storedId = sessionStorage.getItem(consumerStorageKey)
+    if (storedId) {
+      setConsumerIntakeId(storedId)
+      if (sessionStorage.getItem(`greenlit_claimed_${storedId}`) === '1') {
+        setSavedToAccount(true)
+      }
+    }
+    if (sessionStorage.getItem(savedStorageKey) === '1') setSavedToAccount(true)
+  }, [consumerStorageKey, savedStorageKey])
+
+  const persistConsumerIntake = async (data, briefData) => {
+    if (persistedRef.current || !data?.intake?.vehicle) return
+
+    const existingId = sessionStorage.getItem(consumerStorageKey)
+    if (existingId) {
+      setConsumerIntakeId(existingId)
+      persistedRef.current = true
+      return
+    }
+
+    persistedRef.current = true
+
+    const inputs = {
+      operational_intake_id: id,
+      media: (data.media ?? []).map((m) => ({
+        kind: m.kind,
+        id: m.id,
+        text_content: m.text_content ?? undefined,
+      })),
+      guided_answers: (data.messages ?? [])
+        .filter((m) => m.role === 'user')
+        .map((m) => m.content),
+      brief_inputs: briefData?.inputs ?? null,
+    }
+
+    try {
+      const row = await saveConsumerIntake({
+        vehicle: data.intake.vehicle,
+        inputs,
+        brief: briefData,
+        status: 'complete',
+      })
+      setConsumerIntakeId(row.id)
+      sessionStorage.setItem(consumerStorageKey, row.id)
+      if (isSignedIn) {
+        setSavedToAccount(true)
+        sessionStorage.setItem(savedStorageKey, '1')
+      } else {
+        markIntakeSessionUsed()
+      }
+    } catch (err) {
+      console.error('Failed to persist consumer intake:', err)
+      persistedRef.current = false
+    }
+  }
 
   useEffect(() => {
     const generatePayload = location.state?.generate ? location.state.payload : null
@@ -38,6 +106,7 @@ export default function BriefResult() {
           setIntake(data.intake)
           setBrief(data.intake.brief)
           setGenerating(false)
+          await persistConsumerIntake(data, data.intake.brief)
         })
         .catch((err) => {
           setError(err.message || 'Failed to generate brief')
@@ -47,12 +116,31 @@ export default function BriefResult() {
     }
 
     getIntake(id)
-      .then((data) => {
+      .then(async (data) => {
         setIntake(data.intake)
         setBrief(data.intake.brief)
+        if (data.intake.status === 'complete' && data.intake.brief) {
+          await persistConsumerIntake(data, data.intake.brief)
+        }
       })
       .catch((err) => setError(err.message))
   }, [id, location.state])
+
+  const handleSaveToAccount = () => {
+    if (!consumerIntakeId) return
+    const deviceId = getOrCreateDeviceId()
+    openAuthModal({
+      mode: 'claim',
+      disableSkip: true,
+      onBeforeOAuth: () => {
+        setPendingClaim({ deviceId, intakeId: consumerIntakeId })
+      },
+      onClaimSuccess: () => {
+        setSavedToAccount(true)
+        sessionStorage.setItem(savedStorageKey, '1')
+      },
+    })
+  }
 
   if (error) {
     return (
@@ -222,6 +310,35 @@ export default function BriefResult() {
         <p className="mt-8 text-xs text-text-mute">{brief.disclaimer}</p>
       )}
 
+      {!generating && !isSignedIn && !savedToAccount && consumerIntakeId && (
+        <div className="mt-10 rounded-2xl border border-brand/30 bg-brand-soft p-5">
+          <h2 className="text-lg font-semibold text-text">Save this brief to your account</h2>
+          <p className="mt-1 text-sm text-text-dim">
+            Keep this brief across devices and access it from My intakes anytime.
+          </p>
+          <button
+            type="button"
+            onClick={handleSaveToAccount}
+            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-ink hover:bg-brand-dim"
+          >
+            Save this brief to your account
+          </button>
+          <p className="mt-3 text-xs text-text-mute">
+            You can also download the brief PDF to save it locally.
+          </p>
+        </div>
+      )}
+
+      {!generating && savedToAccount && (
+        <div className="mt-10 flex items-center gap-2 rounded-xl border border-brand/30 bg-brand-soft px-4 py-3 text-sm text-brand">
+          <CheckCircle2 size={16} />
+          Saved to your account
+          <Link to="/account" className="ml-auto text-brand hover:underline">
+            View my intakes
+          </Link>
+        </div>
+      )}
+
       {!generating && (
         <div className="mt-10 flex flex-wrap gap-3">
           <button
@@ -231,13 +348,14 @@ export default function BriefResult() {
             <Download size={16} />
             Download brief as PDF
           </button>
-          <Link
-            to="/intake"
+          <button
+            type="button"
+            onClick={startIntake}
             className="inline-flex items-center gap-2 rounded-xl border border-line px-5 py-3 text-sm font-medium text-text/80 hover:border-brand/50"
           >
             <FileText size={16} />
             New intake
-          </Link>
+          </button>
         </div>
       )}
 

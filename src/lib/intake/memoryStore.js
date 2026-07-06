@@ -75,3 +75,60 @@ export function memoryUpdateCustomerName(intakeId, name) {
 export function memoryListShopIntakes(_shopSlug) {
   return []
 }
+
+/** Consumer-side persistence (in-memory when Supabase is not configured). */
+
+const consumerProfiles = new Map()
+const consumerIntakes = new Map()
+let memoryConsumerUserId = null
+
+export function memoryUpsertConsumerProfile(user) {
+  consumerProfiles.set(user.id, {
+    id: user.id,
+    email: user.email ?? null,
+    display_name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
+  })
+  memoryConsumerUserId = user.id
+}
+
+export function memorySaveConsumerIntake({ vehicle, inputs, brief, status = 'complete' }) {
+  const id = crypto.randomUUID()
+  const row = {
+    id,
+    user_id: memoryConsumerUserId,
+    device_id: memoryConsumerUserId ? null : 'memory-device',
+    vehicle,
+    inputs,
+    brief,
+    status,
+    created_at: new Date().toISOString(),
+    completed_at: new Date().toISOString(),
+    claimed_at: null,
+  }
+  consumerIntakes.set(id, row)
+  return row
+}
+
+export function memoryClaimConsumerIntake(deviceId, intakeId) {
+  const row = consumerIntakes.get(intakeId)
+  if (!row || row.device_id !== deviceId || row.user_id) {
+    throw new Error('Intake not found or already claimed')
+  }
+  row.user_id = memoryConsumerUserId ?? 'memory-user'
+  row.status = 'claimed'
+  row.claimed_at = new Date().toISOString()
+  row.device_id = null
+  return row
+}
+
+export function memoryListConsumerIntakes() {
+  const uid = memoryConsumerUserId
+  if (!uid) return []
+  return [...consumerIntakes.values()]
+    .filter((row) => row.user_id === uid)
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+}
+
+export function memoryGetConsumerIntake(id) {
+  return consumerIntakes.get(id) ?? null
+}

@@ -1,5 +1,14 @@
 import { requireSupabase } from '../supabase.js'
 
+export async function signInWithGoogle(redirectTo) {
+  const sb = requireSupabase()
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo },
+  })
+  if (error) throw error
+}
+
 export async function signInWithMagicLink(email, redirectTo) {
   const sb = requireSupabase()
   const { error } = await sb.auth.signInWithOtp({
@@ -24,6 +33,6 @@ export async function getSession() {
 
 export function onAuthStateChange(callback) {
   const sb = requireSupabase()
-  const { data } = sb.auth.onAuthStateChange((_event, session) => callback(session))
+  const { data } = sb.auth.onAuthStateChange((event, session) => callback(event, session))
   return data.subscription
 }
