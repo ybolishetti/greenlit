@@ -35,14 +35,7 @@ export default function Navbar() {
         <Link to="/">
           <Logo />
         </Link>
-        <nav className="flex items-center gap-4 text-sm text-white/70">
-          <button
-            type="button"
-            onClick={startIntake}
-            className="hidden hover:text-white transition-colors sm:inline"
-          >
-            Report a problem
-          </button>
+        <nav className="flex items-center gap-6 text-sm text-white/70 sm:gap-8">
           <Link to="/shop/demo-shop" className="hidden hover:text-white transition-colors sm:inline">
             For shops
           </Link>
@@ -98,7 +91,7 @@ export default function Navbar() {
           <button
             type="button"
             onClick={startIntake}
-            className="rounded-full bg-brand px-4 py-2 font-medium text-ink hover:bg-brand-dim transition-colors"
+            className="ml-1 rounded-full bg-brand px-5 py-2 font-medium text-ink hover:bg-brand-dim transition-colors sm:ml-2"
           >
             Start intake
           </button>
