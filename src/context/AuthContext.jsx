@@ -7,6 +7,7 @@ import {
   onAuthStateChange,
   upsertConsumerProfile,
 } from '../lib/db'
+import { getShopMembershipsForUser } from '../lib/db/shopMembership'
 import { consumePendingClaim, consumePostAuthRedirect, getOrCreateDeviceId } from '../lib/deviceId'
 import AuthModal from '../components/auth/AuthModal'
 import Toast from '../components/Toast'
@@ -19,6 +20,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(isSupabaseConfigured)
   const [modal, setModal] = useState(null)
   const [toast, setToast] = useState(null)
+  const [shopMemberships, setShopMemberships] = useState([])
   const modalRef = useRef(null)
 
   modalRef.current = modal
@@ -48,13 +50,34 @@ export function AuthProvider({ children }) {
       .then((s) => {
         setSession(s)
         setLoading(false)
+        if (s?.user) {
+          getShopMembershipsForUser(s.user.id).then(setShopMemberships).catch(() => {})
+        }
       })
       .catch(() => setLoading(false))
 
     const subscription = onAuthStateChange(async (event, nextSession) => {
       setSession(nextSession)
 
+      if (!nextSession?.user) {
+        setShopMemberships([])
+      }
+
       if (event === 'SIGNED_IN' && nextSession?.user) {
+        const memberships = await getShopMembershipsForUser(nextSession.user.id).catch(() => [])
+        setShopMemberships(memberships)
+
+        if (memberships.length > 0) {
+          const path = window.location.pathname
+          const cameFromLandingOrAccount = path === '/' || path === '/account'
+          if (cameFromLandingOrAccount) {
+            navigate(`/shop/${memberships[0].shops.slug}/dashboard`)
+          }
+          modalRef.current?.onAuthSuccess?.()
+          setModal(null)
+          return
+        }
+
         try {
           await upsertConsumerProfile(nextSession.user)
         } catch (err) {
@@ -91,6 +114,7 @@ export function AuthProvider({ children }) {
     user: session?.user ?? null,
     loading,
     isSignedIn: Boolean(session?.user),
+    shopMemberships,
     openAuthModal,
     closeAuthModal,
     showToast,
