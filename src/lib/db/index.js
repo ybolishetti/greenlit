@@ -23,4 +23,5 @@ export {
   claimAnonymousIntake,
   listConsumerIntakes,
   getConsumerIntake,
+  debugListConsumerIntakes,
 } from './consumer.js'

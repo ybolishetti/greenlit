@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Loader2, X } from 'lucide-react'
 import { isSupabaseConfigured } from '../../lib/supabase'
 import { signInWithGoogle } from '../../lib/db'
+import { clearIntakeSessionUsed } from '../../lib/deviceId'
 
 const COPY = {
   start: {
@@ -15,25 +16,25 @@ const COPY = {
   limit: {
     header: 'Create an account to run more intakes',
     benefits: [
-      'Your intake history saved across devices',
-      'Faster re-intakes for recurring issues',
+      'Run unlimited intakes across devices',
+      'Your intake history saved and searchable',
       'Get notified when your mechanic confirms the diagnosis',
     ],
   },
   login: {
-    header: 'Save your intakes to your account',
+    header: 'Welcome back',
     benefits: [
-      'Your intake history saved across devices',
-      'Faster re-intakes for recurring issues',
-      'Get notified when your mechanic confirms the diagnosis',
+      'Pick up where you left off',
+      'Your saved intakes and mechanic briefs',
+      'Cross-device sync',
     ],
   },
   claim: {
-    header: 'Save your intakes to your account',
+    header: 'Save this brief to your account',
     benefits: [
-      'Your intake history saved across devices',
-      'Faster re-intakes for recurring issues',
-      'Get notified when your mechanic confirms the diagnosis',
+      'Keep this brief for your mechanic visit',
+      'Get outcome updates after the appointment',
+      'Access your intake history anytime',
     ],
   },
 }
@@ -82,6 +83,12 @@ export default function AuthModal({
       setError(err.message || 'Sign-in failed')
       setSigningIn(false)
     }
+  }
+
+  const handleFreshSession = () => {
+    clearIntakeSessionUsed()
+    onClose?.()
+    window.location.reload()
   }
 
   return (
@@ -134,6 +141,16 @@ export default function AuthModal({
           <p className="mt-3 text-center text-xs text-text-mute">
             Sign-in requires Supabase configuration. Demo mode works without an account.
           </p>
+        )}
+
+        {mode === 'limit' && (
+          <button
+            type="button"
+            onClick={handleFreshSession}
+            className="mt-4 w-full text-center text-sm text-text-mute hover:text-text-dim"
+          >
+            Not ready yet? Reload for a fresh session — but your first brief won't be saved.
+          </button>
         )}
 
         {showSkip ? (

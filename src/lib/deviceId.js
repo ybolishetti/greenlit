@@ -20,6 +20,10 @@ export function markIntakeSessionUsed() {
   sessionStorage.setItem(INTAKE_USED_KEY, '1')
 }
 
+export function clearIntakeSessionUsed() {
+  sessionStorage.removeItem(INTAKE_USED_KEY)
+}
+
 export function setPendingClaim({ deviceId, intakeId }) {
   sessionStorage.setItem(PENDING_CLAIM_KEY, JSON.stringify({ deviceId, intakeId }))
 }

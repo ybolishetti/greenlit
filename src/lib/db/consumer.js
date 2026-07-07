@@ -83,3 +83,10 @@ export async function getConsumerIntake(id) {
   if (error) throw error
   return data
 }
+
+export async function debugListConsumerIntakes() {
+  const sb = requireSupabase()
+  const { data, error } = await sb.rpc('debug_list_consumer_intakes')
+  if (error) throw error
+  return data ?? []
+}
