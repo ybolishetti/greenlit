@@ -9,6 +9,8 @@ import Account from './pages/Account'
 import AccountBrief from './pages/AccountBrief'
 import ShopLanding from './pages/ShopLanding'
 import ShopDashboard from './pages/ShopDashboard'
+import ForShops from './pages/ForShops'
+import AdminShops from './pages/admin/AdminShops'
 import IntakeDebug from './pages/dev/IntakeDebug'
 import ConsumerIntakesDebug from './pages/dev/ConsumerIntakesDebug'
 import AnnotationTool from './pages/dev/AnnotationTool'
@@ -28,6 +30,8 @@ function App() {
             <Route path="/account/:id" element={<AccountBrief />} />
             <Route path="/shop/:shopId" element={<ShopLanding />} />
             <Route path="/shop/:shopId/dashboard" element={<ShopDashboard />} />
+            <Route path="/for-shops" element={<ForShops />} />
+            <Route path="/admin/shops" element={<AdminShops />} />
             <Route path="/dev/intake/:id" element={<IntakeDebug />} />
             <Route path="/dev/consumer-intakes" element={<ConsumerIntakesDebug />} />
             <Route path="/dev/annotate" element={<AnnotationTool />} />
