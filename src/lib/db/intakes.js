@@ -23,7 +23,11 @@ export async function getShopBySlug(slug) {
     return null
   }
   const sb = requireSupabase()
-  const { data, error } = await sb.from('shops').select('id, slug, name').eq('slug', slug).maybeSingle()
+  const { data, error } = await sb
+    .from('shops')
+    .select('id, slug, name, plan, address, contact_email, contact_phone, timezone')
+    .eq('slug', slug)
+    .maybeSingle()
   if (error) throw error
   return data
 }

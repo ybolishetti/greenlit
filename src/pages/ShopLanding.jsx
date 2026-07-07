@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
-import { Zap, ArrowRight, LayoutDashboard } from 'lucide-react'
+import { Zap, ArrowRight } from 'lucide-react'
 import { getShopBySlug } from '../lib/db'
 import { isSupabaseConfigured } from '../lib/supabase'
 
@@ -12,7 +12,7 @@ export default function ShopLanding() {
 
   useEffect(() => {
     if (isSupabaseConfigured) {
-      getShopBySlug(shopSlug).then(setShop)
+      getShopBySlug(shopSlug).then(setShop).catch((err) => console.error('Failed to load shop:', err))
     } else if (shopSlug === 'demo-shop') {
       setShop({ slug: 'demo-shop', name: 'Demo Shop' })
     }
@@ -68,16 +68,6 @@ export default function ShopLanding() {
             Displayed at the {shopName} front desk & sent with appointment texts
           </p>
         </div>
-      </div>
-
-      <div className="mt-12 border-t border-line/60 pt-6 text-center">
-        <Link
-          to={`/shop/${shopSlug}/dashboard`}
-          className="inline-flex items-center gap-2 text-sm text-text-mute hover:text-text"
-        >
-          <LayoutDashboard size={14} />
-          Shop staff dashboard
-        </Link>
       </div>
     </div>
   )
