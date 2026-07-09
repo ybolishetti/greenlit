@@ -8,10 +8,13 @@ import { signOut } from '../lib/db'
 import { useOpenLogin, useStartIntake } from '../hooks/useIntakeAccess'
 
 export default function Navbar() {
-  const { isSignedIn, user } = useAuth()
+  const { isSignedIn, user, shopMemberships } = useAuth()
   const startIntake = useStartIntake()
   const openLogin = useOpenLogin()
   const [menuOpen, setMenuOpen] = useState(false)
+
+  const isShopStaff = shopMemberships.length > 0
+  const dashboardPath = isShopStaff ? `/shop/${shopMemberships[0].shops.slug}/dashboard` : null
 
   const displayName =
     user?.user_metadata?.full_name ??
@@ -36,9 +39,11 @@ export default function Navbar() {
           <Logo />
         </Link>
         <nav className="flex items-center gap-6 text-sm text-white/70 sm:gap-8">
-          <Link to="/shop/demo-shop" className="hidden hover:text-white transition-colors sm:inline">
-            For shops
-          </Link>
+          {!isShopStaff && (
+            <Link to="/for-shops" className="hidden hover:text-white transition-colors sm:inline">
+              For shops
+            </Link>
+          )}
 
           {isSignedIn ? (
             <div className="relative">
@@ -60,11 +65,11 @@ export default function Navbar() {
                   />
                   <div className="absolute right-0 z-50 mt-2 w-44 rounded-xl border border-line bg-panel py-1 shadow-lg">
                     <Link
-                      to="/account"
+                      to={isShopStaff ? dashboardPath : '/account'}
                       onClick={() => setMenuOpen(false)}
                       className="block px-4 py-2 text-sm text-text hover:bg-line/40"
                     >
-                      My intakes
+                      {isShopStaff ? 'Shop dashboard' : 'My intakes'}
                     </Link>
                     <button
                       type="button"
@@ -88,13 +93,22 @@ export default function Navbar() {
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={startIntake}
-            className="ml-1 rounded-full bg-brand px-5 py-2 font-medium text-ink hover:bg-brand-dim transition-colors sm:ml-2"
-          >
-            Start intake
-          </button>
+          {isShopStaff ? (
+            <Link
+              to={dashboardPath}
+              className="ml-1 rounded-full bg-brand px-5 py-2 font-medium text-ink hover:bg-brand-dim transition-colors sm:ml-2"
+            >
+              Go to dashboard
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={startIntake}
+              className="ml-1 rounded-full bg-brand px-5 py-2 font-medium text-ink hover:bg-brand-dim transition-colors sm:ml-2"
+            >
+              Start intake
+            </button>
+          )}
         </nav>
       </div>
     </header>

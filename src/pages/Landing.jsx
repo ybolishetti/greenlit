@@ -114,14 +114,14 @@ export default function Landing() {
       <section className="mx-auto max-w-6xl px-6 py-16 text-center">
         <h2 className="text-2xl font-semibold text-white">Run a repair shop?</h2>
         <p className="mx-auto mt-2 max-w-xl text-white/50">
-          Give customers a QR code at drop-off. They complete an intake before
-          you even touch the car — you get a brief, they skip the line.
+          Greenlit gives your customers a QR code at drop-off. Every intake arrives structured,
+          ranked, and ready — before the car hits your bay.
         </p>
         <Link
-          to="/shop/demo-shop"
+          to="/for-shops"
           className="mt-6 inline-flex items-center gap-2 rounded-xl border border-line bg-panel px-5 py-3 text-sm font-medium text-white hover:border-brand/50 transition-colors"
         >
-          See the shop demo
+          For repair shops
           <ArrowRight size={16} />
         </Link>
       </section>
