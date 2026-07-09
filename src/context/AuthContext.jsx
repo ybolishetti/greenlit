@@ -47,12 +47,13 @@ export function AuthProvider({ children }) {
     }
 
     getSession()
-      .then((s) => {
+      .then(async (s) => {
         setSession(s)
-        setLoading(false)
         if (s?.user) {
-          getShopMembershipsForUser(s.user.id).then(setShopMemberships).catch(() => {})
+          const memberships = await getShopMembershipsForUser(s.user.id).catch(() => [])
+          setShopMemberships(memberships)
         }
+        setLoading(false)
       })
       .catch(() => setLoading(false))
 
@@ -71,7 +72,7 @@ export function AuthProvider({ children }) {
           const path = window.location.pathname
           const cameFromLandingOrAccount = path === '/' || path === '/account'
           if (cameFromLandingOrAccount) {
-            navigate(`/shop/${memberships[0].shops.slug}/dashboard`)
+            navigate(`/shop/${memberships[0].shops.slug}`)
           }
           modalRef.current?.onAuthSuccess?.()
           setModal(null)

@@ -4,11 +4,17 @@ import Navbar from './components/Navbar'
 import Landing from './pages/Landing'
 import IntakeNew from './pages/intake/IntakeNew'
 import IntakeSession from './pages/intake/IntakeSession'
+import ShopQrRedirect from './pages/intake/ShopQrRedirect'
 import BriefResult from './pages/BriefResult'
 import Account from './pages/Account'
 import AccountBrief from './pages/AccountBrief'
-import ShopLanding from './pages/ShopLanding'
-import ShopDashboard from './pages/ShopDashboard'
+import ShopLayout from './pages/shop/ShopLayout'
+import OverviewTab from './pages/shop/OverviewTab'
+import IntakesTab from './pages/shop/IntakesTab'
+import IntakeDetail from './pages/shop/IntakeDetail'
+import KitTab from './pages/shop/KitTab'
+import TeamTab from './pages/shop/TeamTab'
+import SettingsTab from './pages/shop/SettingsTab'
 import ForShops from './pages/ForShops'
 import AdminShops from './pages/admin/AdminShops'
 import IntakeDebug from './pages/dev/IntakeDebug'
@@ -28,8 +34,15 @@ function App() {
             <Route path="/brief/:id" element={<BriefResult />} />
             <Route path="/account" element={<Account />} />
             <Route path="/account/:id" element={<AccountBrief />} />
-            <Route path="/shop/:shopId" element={<ShopLanding />} />
-            <Route path="/shop/:shopId/dashboard" element={<ShopDashboard />} />
+            <Route path="/i/:slug" element={<ShopQrRedirect />} />
+            <Route path="/shop/:slug" element={<ShopLayout />}>
+              <Route index element={<OverviewTab />} />
+              <Route path="intakes" element={<IntakesTab />} />
+              <Route path="intakes/:id" element={<IntakeDetail />} />
+              <Route path="kit" element={<KitTab />} />
+              <Route path="team" element={<TeamTab />} />
+              <Route path="settings" element={<SettingsTab />} />
+            </Route>
             <Route path="/for-shops" element={<ForShops />} />
             <Route path="/admin/shops" element={<AdminShops />} />
             <Route path="/dev/intake/:id" element={<IntakeDebug />} />

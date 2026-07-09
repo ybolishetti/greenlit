@@ -68,9 +68,12 @@ export async function listShopIntakes(shopSlug) {
 
   const { data, error } = await sb
     .from('intakes')
-    .select('id, shop_id, status, brief, urgency, category, customer_name, created_at, updated_at')
+    .select(
+      'id, shop_id, status, brief, urgency, category, customer_name, vehicle, created_at, updated_at, flagged, flagged_reason, flagged_at, archived_at'
+    )
     .eq('shop_id', shop.id)
     .order('created_at', { ascending: false })
+    .limit(500)
 
   if (error) throw error
 
@@ -107,5 +110,38 @@ export async function updateCustomerName(intakeId, customerName) {
   }
   const sb = requireSupabase()
   const { error } = await sb.from('intakes').update({ customer_name: customerName || null }).eq('id', intakeId)
+  if (error) throw error
+}
+
+export async function flagIntake(intakeId, reason) {
+  const sb = requireSupabase()
+  const { error } = await sb
+    .from('intakes')
+    .update({ flagged: true, flagged_reason: reason || null, flagged_at: new Date().toISOString() })
+    .eq('id', intakeId)
+  if (error) throw error
+}
+
+export async function unflagIntake(intakeId) {
+  const sb = requireSupabase()
+  const { error } = await sb
+    .from('intakes')
+    .update({ flagged: false, flagged_reason: null, flagged_at: null })
+    .eq('id', intakeId)
+  if (error) throw error
+}
+
+export async function archiveIntake(intakeId) {
+  const sb = requireSupabase()
+  const { error } = await sb
+    .from('intakes')
+    .update({ archived_at: new Date().toISOString() })
+    .eq('id', intakeId)
+  if (error) throw error
+}
+
+export async function unarchiveIntake(intakeId) {
+  const sb = requireSupabase()
+  const { error } = await sb.from('intakes').update({ archived_at: null }).eq('id', intakeId)
   if (error) throw error
 }
