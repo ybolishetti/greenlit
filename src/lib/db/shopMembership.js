@@ -27,3 +27,10 @@ export async function removeShopMember(shopId, userId) {
     .eq('user_id', userId)
   if (error) throw error
 }
+
+export async function claimPendingShopMemberships() {
+  const sb = requireSupabase()
+  const { data, error } = await sb.rpc('claim_pending_shop_memberships')
+  if (error) throw error
+  return data ?? 0
+}

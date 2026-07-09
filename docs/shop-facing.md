@@ -10,48 +10,76 @@ One login, role-based redirect. There is no consumer/shop toggle on sign-in.
 
 1. User clicks "Continue with Google" (same flow for consumers and shop
    staff — `AuthModal` / `signInWithGoogle`).
-2. On the `SIGNED_IN` event, `AuthContext` calls
-   `getShopMembershipsForUser(user.id)` (`src/lib/db/shopMembership.js`),
+2. On both the `SIGNED_IN` event and initial page load (`getSession()`),
+   `AuthContext` first calls `claimPendingShopMemberships()` (the
+   `claim_pending_shop_memberships()` RPC — see "Onboarding flow" below),
+   then `getShopMembershipsForUser(user.id)` (`src/lib/db/shopMembership.js`),
    which reads `shop_members` joined to `shops(slug, name)`.
 3. If the user has one or more shop memberships:
    - They're treated as shop staff, not a consumer (no `upsertConsumerProfile`,
      no anonymous-intake claim).
-   - If they signed in from `/` or `/account`, they're redirected to
-     `/shop/:slug/dashboard` for their first shop membership.
-   - If they signed in from somewhere under `/shop/...`, they're left alone.
+   - Unless the current path starts with `/shop/`, `/intake`, `/i/`, or
+     `/admin`, they're redirected to `/shop/:slug` for their first shop
+     membership (`redirectShopMemberIfNeeded` in `AuthContext.jsx`). This
+     runs on every sign-in and every page load with an existing session, not
+     just when signing in from `/` or `/account`.
 4. If the user has no shop memberships, behavior is unchanged from before
    this PR: consumer profile upsert, pending-intake claim, post-auth redirect.
 
 `shopMemberships` is exposed on `useAuth()` and read by `Navbar` (to swap
 "Start intake" / "For shops" for "Go to dashboard" / "Shop dashboard") and by
-`ShopDashboard`'s Team tab (to determine if the current user is an owner).
+`TeamTab` (to determine if the current user is an owner).
 
-Membership is also fetched on initial page load (`getSession()`), not just on
-the `SIGNED_IN` event, so a page reload on an already-authenticated shop-staff
-session still has `shopMemberships` populated.
+Membership is fetched on both initial page load (`getSession()`) and the
+`SIGNED_IN` event, so a page reload on an already-authenticated shop-staff
+session still has `shopMemberships` populated and still redirects.
+
+## Onboarding flow
+
+Shop staff don't need to sign in before they can be added to a shop:
+
+1. An admin (via `/admin/shops`) or shop owner (via the Team tab) invites a
+   teammate by email — this inserts a row into `pending_shop_members`
+   (`shop_id`, `email`, `role`), added in `0007_shop_onboarding_v2.sql`.
+2. The invitee signs in with Google using that email.
+3. `claim_pending_shop_memberships()` (SECURITY DEFINER RPC, called from
+   `AuthContext` on every sign-in/page-load) matches the signed-in user's
+   `auth.users.email` case-insensitively against unclaimed
+   `pending_shop_members` rows, marks them claimed, and inserts the
+   corresponding `shop_members` row.
+4. The membership fetch that follows picks up the new row, and the redirect
+   logic above sends them straight to `/shop/:slug`.
+
+If a teammate signs in with a different Google account than the email they
+were invited with, nothing is claimed — they need a new invite sent to the
+email they'll actually sign in with.
 
 ## Shop dashboard tabs
 
-`ShopDashboard.jsx` (`/shop/:shopId/dashboard`) is a single page with 5 tabs,
-switched via the `?tab=` query param (default `overview`):
+`ShopLayout.jsx` (`/shop/:slug`) is a shell with nested routes per tab, under
+`src/pages/shop/`:
 
-- **Overview** — 4 metric cards (this week / this month / avg turnaround /
-  outcome accuracy) computed client-side from the same `listShopIntakes` rows
-  used by the Intakes tab, plus a 5-row recent list.
-- **Intakes** — the original flat intake list + rating flow, now with filter
-  chips (All / Unrated / Today / This week / Urgent), an urgency color
-  legend, and a "waiting on customer" state for in-progress intakes with no
-  brief yet.
-- **Kit** — QR code (`QRCodeCanvas`, encodes `/intake?shop=<slug>`) with a
-  working "Letter PDF" download (canvas → `jsPDF.addImage`). "Counter card"
-  and "Table tent" are stubbed with a disabled button + tooltip.
-- **Team** — roster via the `list_shop_members_with_email` RPC (needed
-  because `auth.users` isn't exposed to PostgREST directly). Owners can
-  remove members (`shop_members_owner_delete` RLS policy); "Invite teammate"
-  is a modal that tells the owner to email `hello@greenlit.co` for now — no
-  real invite send in this PR.
-- **Settings** — read-only shop fields (name, slug, address, contact info,
-  timezone, plan). Beta shops don't self-edit; copy points to support.
+- **Overview** (`OverviewTab.jsx`, index route) — 4 metric cards (this week /
+  this month / avg turnaround / outcome accuracy) computed client-side from
+  the same `listShopIntakes` rows used by the Intakes tab, plus a 5-row
+  recent list.
+- **Intakes** (`IntakesTab.jsx`) — the original flat intake list + rating
+  flow, now with filter chips (All / Unrated / Today / This week / Urgent),
+  an urgency color legend, and a "waiting on customer" state for
+  in-progress intakes with no brief yet.
+- **Kit** (`KitTab.jsx`) — QR code (`QRCodeCanvas`, encodes `/i/<slug>`)
+  wrapped in a branded on-screen frame (Greenlit wordmark, shop name,
+  headline, footer trust line), plus a matching branded "Download PDF"
+  (canvas → `jsPDF.addImage`, accent bars, framed QR, 3-step instructions).
+- **Team** (`TeamTab.jsx`) — roster via the `list_shop_members_with_email`
+  RPC (needed because `auth.users` isn't exposed to PostgREST directly).
+  Owners can remove members (`shop_members_owner_delete` RLS policy) and see
+  a "Pending invites" list (unclaimed `pending_shop_members` rows) with a
+  revoke button. "Invite teammate" (owner-only) is a real self-serve invite
+  — see "Onboarding flow" above.
+- **Settings** (`SettingsTab.jsx`) — read-only shop fields (name, slug,
+  address, contact info, timezone, plan). Beta shops don't self-edit; copy
+  points to support.
 
 ## Admin provisioning (`/admin/shops`)
 
@@ -73,9 +101,10 @@ The panel has three sections:
   (`new → contacted → pilot → active → churned/rejected`).
 - **Active shops** — `shops` + a member count (queried separately from
   `shop_members`, joined client-side). "Manage" opens a drawer to edit name,
-  plan, address, and contact fields. Slug is read-only. "Add member" in the
-  drawer is a placeholder pointing at the Supabase dashboard — no self-serve
-  invite yet.
+  plan, address, and contact fields. Slug is read-only. The drawer also shows
+  the member roster (`list_shop_members_with_email`), pending invites with a
+  revoke button, and an "Add member" form that inserts into
+  `pending_shop_members` (email + role) — see "Onboarding flow" above.
 - **Provision new shop** — name + auto-suggested (editable) kebab-case slug,
   optional "convert from lead" dropdown that also sets the lead's
   `converted_shop_id` and `status = 'active'`.

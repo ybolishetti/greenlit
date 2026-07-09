@@ -1,10 +1,14 @@
 export {
+  archiveIntake,
   completeIntakeStub,
   createIntake,
+  flagIntake,
   getIntake,
   getShopBySlug,
   listShopIntakes,
   resolveShopId,
+  unarchiveIntake,
+  unflagIntake,
   updateCustomerName,
 } from './intakes.js'
 export { appendMessage } from './messages.js'
