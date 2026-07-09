@@ -14,7 +14,7 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   const isShopStaff = shopMemberships.length > 0
-  const dashboardPath = isShopStaff ? `/shop/${shopMemberships[0].shops.slug}/dashboard` : null
+  const dashboardPath = isShopStaff ? `/shop/${shopMemberships[0].shops.slug}` : null
 
   const displayName =
     user?.user_metadata?.full_name ??

@@ -35,7 +35,7 @@ export default function AuthGate({ shopSlug, children }) {
   }
 
   if (!session) {
-    const redirectTo = `${window.location.origin}/shop/${shopSlug}/dashboard`
+    const redirectTo = `${window.location.origin}/shop/${shopSlug}`
     return (
       <div className="mx-auto max-w-md px-6 py-16">
         <h1 className="text-xl font-semibold text-text">Shop staff sign in</h1>
