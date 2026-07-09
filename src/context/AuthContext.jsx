@@ -7,12 +7,21 @@ import {
   onAuthStateChange,
   upsertConsumerProfile,
 } from '../lib/db'
-import { getShopMembershipsForUser } from '../lib/db/shopMembership'
+import { claimPendingShopMemberships, getShopMembershipsForUser } from '../lib/db/shopMembership'
 import { consumePendingClaim, consumePostAuthRedirect, getOrCreateDeviceId } from '../lib/deviceId'
 import AuthModal from '../components/auth/AuthModal'
 import Toast from '../components/Toast'
 
 const AuthContext = createContext(null)
+
+const SHOP_SCOPED_PREFIXES = ['/shop/', '/intake', '/i/', '/admin']
+
+function redirectShopMemberIfNeeded(navigate, memberships) {
+  if (!memberships.length) return
+  const path = window.location.pathname
+  if (SHOP_SCOPED_PREFIXES.some((prefix) => path.startsWith(prefix))) return
+  navigate(`/shop/${memberships[0].shops.slug}`)
+}
 
 export function AuthProvider({ children }) {
   const navigate = useNavigate()
@@ -50,8 +59,14 @@ export function AuthProvider({ children }) {
       .then(async (s) => {
         setSession(s)
         if (s?.user) {
+          try {
+            await claimPendingShopMemberships()
+          } catch (err) {
+            console.warn('Failed to claim pending shop memberships:', err)
+          }
           const memberships = await getShopMembershipsForUser(s.user.id).catch(() => [])
           setShopMemberships(memberships)
+          redirectShopMemberIfNeeded(navigate, memberships)
         }
         setLoading(false)
       })
@@ -65,15 +80,17 @@ export function AuthProvider({ children }) {
       }
 
       if (event === 'SIGNED_IN' && nextSession?.user) {
+        try {
+          await claimPendingShopMemberships()
+        } catch (err) {
+          console.warn('Failed to claim pending shop memberships:', err)
+        }
+
         const memberships = await getShopMembershipsForUser(nextSession.user.id).catch(() => [])
         setShopMemberships(memberships)
 
         if (memberships.length > 0) {
-          const path = window.location.pathname
-          const cameFromLandingOrAccount = path === '/' || path === '/account'
-          if (cameFromLandingOrAccount) {
-            navigate(`/shop/${memberships[0].shops.slug}`)
-          }
+          redirectShopMemberIfNeeded(navigate, memberships)
           modalRef.current?.onAuthSuccess?.()
           setModal(null)
           return
