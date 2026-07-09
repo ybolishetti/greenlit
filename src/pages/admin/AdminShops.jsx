@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { X } from 'lucide-react'
+import { Trash2, X } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { isAdminEmail } from '../../lib/adminAllowlist'
 import { convertLeadToShop, listLeads, updateLeadStatus } from '../../lib/db/shopLeads'
 import { createShop, listShopsWithMemberCounts, updateShop } from '../../lib/db/shops'
+import { getShopMembersWithEmail } from '../../lib/db/shopMembership'
+import { invite, listPending, revokePending } from '../../lib/db/pendingShopMembers'
 import { isSupabaseConfigured } from '../../lib/supabase'
 
 const LEAD_STATUSES = ['new', 'contacted', 'pilot', 'active', 'churned', 'rejected']
@@ -183,6 +185,14 @@ function ManageShopDrawer({ shop, onClose, onSaved }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
+  const [members, setMembers] = useState([])
+  const [pending, setPending] = useState([])
+  const [rosterLoaded, setRosterLoaded] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState('member')
+  const [inviting, setInviting] = useState(false)
+  const [inviteError, setInviteError] = useState(null)
+
   const update = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
   const handleSave = async () => {
@@ -197,6 +207,46 @@ function ManageShopDrawer({ shop, onClose, onSaved }) {
     } finally {
       setSaving(false)
     }
+  }
+
+  const refreshRoster = useCallback(async () => {
+    try {
+      const [memberRows, pendingRows] = await Promise.all([
+        getShopMembersWithEmail(shop.id),
+        listPending(shop.id),
+      ])
+      setMembers(memberRows)
+      setPending(pendingRows)
+    } catch (err) {
+      setInviteError(err.message)
+    } finally {
+      setRosterLoaded(true)
+    }
+  }, [shop.id])
+
+  useEffect(() => {
+    refreshRoster()
+  }, [refreshRoster])
+
+  const handleInvite = async (e) => {
+    e.preventDefault()
+    setInviting(true)
+    setInviteError(null)
+    try {
+      await invite(shop.id, inviteEmail, inviteRole)
+      setInviteEmail('')
+      setInviteRole('member')
+      await refreshRoster()
+    } catch (err) {
+      setInviteError(err.message)
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  const handleRevoke = async (id) => {
+    await revokePending(id)
+    refreshRoster()
   }
 
   return (
@@ -252,9 +302,80 @@ function ManageShopDrawer({ shop, onClose, onSaved }) {
           {saving ? 'Saving…' : 'Save changes'}
         </button>
 
-        <div className="mt-8 rounded-xl border border-line bg-ink/30 p-4">
-          <h4 className="text-sm font-medium text-text">Add member</h4>
-          <p className="mt-1 text-sm text-text-dim">Add manually via Supabase dashboard for now.</p>
+        <div className="mt-8 space-y-6">
+          <div>
+            <h4 className="text-sm font-medium text-text">Members</h4>
+            <div className="mt-2 space-y-2">
+              {members.map((m) => (
+                <div
+                  key={m.user_id}
+                  className="flex items-center justify-between rounded-lg border border-line bg-ink/30 px-3 py-2 text-sm"
+                >
+                  <span className="text-text">{m.email}</span>
+                  <span className="text-xs capitalize text-text-mute">{m.role}</span>
+                </div>
+              ))}
+              {rosterLoaded && members.length === 0 && (
+                <p className="text-sm text-text-dim">No members yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-medium text-text">Pending invites</h4>
+            <div className="mt-2 space-y-2">
+              {pending.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between rounded-lg border border-line bg-ink/30 px-3 py-2 text-sm"
+                >
+                  <div>
+                    <span className="text-text">{p.email}</span>
+                    <span className="ml-2 text-xs capitalize text-text-mute">{p.role}</span>
+                  </div>
+                  <button
+                    onClick={() => handleRevoke(p.id)}
+                    className="text-text-mute hover:text-danger"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+              {rosterLoaded && pending.length === 0 && (
+                <p className="text-sm text-text-dim">No pending invites.</p>
+              )}
+            </div>
+          </div>
+
+          <form onSubmit={handleInvite} className="rounded-xl border border-line bg-ink/30 p-4">
+            <h4 className="text-sm font-medium text-text">Add member</h4>
+            <div className="mt-3 flex gap-2">
+              <input
+                type="email"
+                required
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="teammate@shop.com"
+                className={inputClass}
+              />
+              <select
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value)}
+                className={inputClass}
+              >
+                <option value="member">Member</option>
+                <option value="owner">Owner</option>
+              </select>
+            </div>
+            {inviteError && <p className="mt-2 text-sm text-danger">{inviteError}</p>}
+            <button
+              type="submit"
+              disabled={inviting}
+              className="mt-3 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-ink hover:bg-brand-dim disabled:opacity-50"
+            >
+              {inviting ? 'Sending…' : 'Send invite'}
+            </button>
+          </form>
         </div>
       </div>
     </div>
