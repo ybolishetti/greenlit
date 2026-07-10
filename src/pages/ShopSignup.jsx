@@ -128,13 +128,18 @@ function ShopSignupForm({ user, refreshShopMemberships }) {
     setSubmitting(true)
     try {
       const sb = requireSupabase()
-      const { error } = await sb.rpc('create_shop_self_serve', {
+      const { data: shopId, error } = await sb.rpc('create_shop_self_serve', {
         p_name: name.trim(),
         p_slug: slug,
         p_contact_email: contactEmail.trim(),
         p_timezone: timezone,
       })
       if (error) throw error
+
+      // Fire-and-forget notification to Yash/Alex — never block navigation on this.
+      sb.functions.invoke('notify_new_shop', { body: { shop_id: shopId } }).catch((err) => {
+        console.warn('Failed to send new shop notification:', err)
+      })
 
       await refreshShopMemberships()
       navigate(`/shop/${slug}`)
