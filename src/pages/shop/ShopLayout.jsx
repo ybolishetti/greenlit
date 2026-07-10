@@ -35,9 +35,13 @@ function ShopLayoutInner({ slug, session }) {
   const [loaded, setLoaded] = useState(false)
 
   const refresh = useCallback(async () => {
-    const [shopRow, rows] = await Promise.all([getShopBySlug(slug), listShopIntakes(slug)])
+    const shopRow = await getShopBySlug(slug)
     setShop(shopRow)
-    setIntakes(rows)
+    try {
+      setIntakes(await listShopIntakes(slug))
+    } catch (err) {
+      console.error('Failed to load intakes:', err)
+    }
     setLoaded(true)
   }, [slug])
 
