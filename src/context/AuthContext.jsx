@@ -47,6 +47,13 @@ export function AuthProvider({ children }) {
     setModal(options)
   }, [])
 
+  const refreshShopMemberships = useCallback(async () => {
+    if (!session?.user) return []
+    const memberships = await getShopMembershipsForUser(session.user.id).catch(() => [])
+    setShopMemberships(memberships)
+    return memberships
+  }, [session])
+
   useEffect(() => {
     getOrCreateDeviceId()
 
@@ -133,6 +140,7 @@ export function AuthProvider({ children }) {
     loading,
     isSignedIn: Boolean(session?.user),
     shopMemberships,
+    refreshShopMemberships,
     openAuthModal,
     closeAuthModal,
     showToast,
