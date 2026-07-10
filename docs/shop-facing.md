@@ -99,6 +99,41 @@ Existing (admin-provisioned) shops are unaffected —
 `0009_self_serve_shop_signup.sql` defaults them to `signup_source =
 'admin'`, `signup_status = 'active'`, `created_by = NULL`.
 
+### New shop notifications
+
+Yash and Alex get an email the moment a self-serve shop is created, so they
+have a real-time signal to reach out, qualify the shop, and close a deal
+within 24 hours — there's no Stripe yet, so monetization during pilot is
+manual.
+
+- **Edge function** — `supabase/functions/notify_new_shop`. Looks up the
+  shop (service-role query against `shops` + `auth.admin.getUserById` for
+  the creator's email), skips anything where `signup_source != 'self_serve'`
+  (a safety net, since the function could be called with any `shop_id`),
+  and sends via the [Resend](https://resend.com) REST API from `Greenlit
+  <onboarding@resend.dev>`.
+- **Recipients are hard-coded** in the edge function for pilot:
+  `yashbolishetti@gmail.com` and `alexmoldovean12@gmail.com`. This becomes
+  an `admin_emails`-driven query later; hard-coding keeps it simple to swap.
+- **Fire-and-forget, always** — shop signup is never blocked on
+  notification delivery. If `RESEND_API_KEY` is missing or the Resend
+  request fails, the edge function logs the error server-side and returns
+  `{ ok: false, error }` instead of throwing; the shop still gets created
+  either way. This piggybacks on the same `RESEND_API_KEY` Supabase secret
+  used by invite emails.
+- **Called from two paths** — a `notify_new_shop_trigger()` Postgres
+  trigger (`0010_notify_new_shop_hook.sql`, via `pg_net`, fires on any
+  insert into `shops`) and a direct client-side call from
+  `ShopSignup.jsx` right after `create_shop_self_serve()` returns. The
+  trigger is the backup for non-client paths (admin provisioning, direct
+  SQL, future APIs); the client call is the primary path since `pg_net` can
+  be flaky. Both can fire for the same signup, so **emails may arrive
+  twice** — acceptable for pilot, dedupe later if it becomes noisy.
+- The trigger reads the Supabase project URL and service role key from
+  Postgres-level config (`app.supabase_url`, `app.service_role_key`) set
+  once via `ALTER DATABASE` — see the comment at the top of
+  `0010_notify_new_shop_hook.sql`.
+
 ## Shop dashboard tabs
 
 `ShopLayout.jsx` (`/shop/:slug`) is a shell with nested routes per tab, under
