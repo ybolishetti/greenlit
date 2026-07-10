@@ -5,7 +5,7 @@ export async function getShopMembershipsForUser(userId) {
   const sb = requireSupabase()
   const { data, error } = await sb
     .from('shop_members')
-    .select('shop_id, role, shops(slug, name)')
+    .select('shop_id, role, shops(slug, name, signup_status)')
     .eq('user_id', userId)
   if (error) return []
   return data || []

@@ -16,6 +16,7 @@ import KitTab from './pages/shop/KitTab'
 import TeamTab from './pages/shop/TeamTab'
 import SettingsTab from './pages/shop/SettingsTab'
 import ForShops from './pages/ForShops'
+import ShopSignup from './pages/ShopSignup'
 import AdminShops from './pages/admin/AdminShops'
 import IntakeDebug from './pages/dev/IntakeDebug'
 import ConsumerIntakesDebug from './pages/dev/ConsumerIntakesDebug'
@@ -44,6 +45,7 @@ function App() {
               <Route path="settings" element={<SettingsTab />} />
             </Route>
             <Route path="/for-shops" element={<ForShops />} />
+            <Route path="/for-shops/signup" element={<ShopSignup />} />
             <Route path="/admin/shops" element={<AdminShops />} />
             <Route path="/dev/intake/:id" element={<IntakeDebug />} />
             <Route path="/dev/consumer-intakes" element={<ConsumerIntakesDebug />} />

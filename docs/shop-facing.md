@@ -1,8 +1,8 @@
 # Shop-facing website (beta)
 
-Covers the marketing surface, admin provisioning, auth routing, and dashboard
-layout added for the shop-facing beta. No self-signup, no Stripe, no metering
-enforcement — see "Non-goals" below.
+Covers the marketing surface, admin provisioning, self-serve signup, auth
+routing, and dashboard layout added for the shop-facing beta. No Stripe, no
+metering enforcement — see "Non-goals" below.
 
 ## Auth flow
 
@@ -54,6 +54,51 @@ If a teammate signs in with a different Google account than the email they
 were invited with, nothing is claimed — they need a new invite sent to the
 email they'll actually sign in with.
 
+## Self-serve signup
+
+Any signed-in user can create their own shop at `/for-shops/signup`
+(`src/pages/ShopSignup.jsx`) — no separate signup form, same Google OAuth
+flow as everything else:
+
+1. Signed-out visitors are sent to `/` with the Google auth modal open
+   (`openAuthModal` + `setPostAuthRedirect('/for-shops/signup')`); after the
+   OAuth round-trip they land back on the signup form, signed in.
+2. A signed-in user who already owns a shop (any `shop_members` row with
+   `role = 'owner'`) is redirected straight to that shop's `/shop/:slug` —
+   multi-shop-per-user is out of scope for this PR.
+3. Otherwise they fill in shop name, a slug (auto-suggested from the name,
+   live-checked 300ms-debounced against `is_shop_slug_available()`),
+   contact email (defaults to their Google email), timezone (defaults to the
+   browser's detected zone), and a terms checkbox. Submitting calls
+   `create_shop_self_serve()` (`0009_self_serve_shop_signup.sql`), which:
+   - **Rate-limits to 1 shop per user per 24 hours** (checked against
+     `shops.created_by` + `created_at`).
+   - Validates and rejects **reserved slugs**: `admin`, `api`, `shop`,
+     `intake`, `account`, `auth`, `dev`, `for-shops`, `test`, `www` (kept in
+     sync with the same list in `is_shop_slug_available()`).
+   - Creates the shop on the `pilot` plan with `signup_source =
+     'self_serve'` and `signup_status = 'pending_review'`, and inserts the
+     caller as `owner` in `shop_members` — all in one SECURITY DEFINER
+     function, since the caller isn't a shop member yet.
+4. `AuthContext.refreshShopMemberships()` is called before navigating to
+   `/shop/:slug`, so the new owner lands in their dashboard immediately
+   instead of bouncing off `ShopLayout`'s stale membership check.
+
+**Admin review:** self-serve shops show up in `/admin/shops`'s "Active
+shops" section sorted to the top with an amber "Pending review" badge, a
+signup-source badge (gray = admin-provisioned, green = self-serve), and the
+creator's email (via the `list_shops_admin()` RPC, which joins `auth.users`
+the same way `list_shop_members_with_email()` does). Yash can:
+- **Mark reviewed** — sets `signup_status = 'active'`.
+- **Suspend** — sets `signup_status = 'suspended'`; the owner is redirected
+  away from the dashboard on next login/page-load (with a toast), and
+  `ShopLayout` shows a full-page suspension notice if they navigate to
+  `/shop/:slug` directly.
+
+Existing (admin-provisioned) shops are unaffected —
+`0009_self_serve_shop_signup.sql` defaults them to `signup_source =
+'admin'`, `signup_status = 'active'`, `created_by = NULL`.
+
 ## Shop dashboard tabs
 
 `ShopLayout.jsx` (`/shop/:slug`) is a shell with nested routes per tab, under
@@ -99,12 +144,15 @@ The panel has three sections:
 
 - **Inbound leads** — `shop_leads` rows with a status dropdown
   (`new → contacted → pilot → active → churned/rejected`).
-- **Active shops** — `shops` + a member count (queried separately from
-  `shop_members`, joined client-side). "Manage" opens a drawer to edit name,
-  plan, address, and contact fields. Slug is read-only. The drawer also shows
-  the member roster (`list_shop_members_with_email`), pending invites with a
-  revoke button, and an "Add member" form that inserts into
-  `pending_shop_members` (email + role) — see "Onboarding flow" above.
+- **Active shops** — `shops` (via `list_shops_admin()`, joined with creator
+  email) + a member count (queried separately from `shop_members`, joined
+  client-side). Self-serve shops pending review sort to the top with an
+  amber badge and "Mark reviewed"/"Suspend" actions — see "Self-serve
+  signup" above. "Manage" opens a drawer to edit name, plan, address, and
+  contact fields. Slug is read-only. The drawer also shows the member roster
+  (`list_shop_members_with_email`), pending invites with a revoke button,
+  and an "Add member" form that inserts into `pending_shop_members` (email +
+  role) — see "Onboarding flow" above.
 - **Provision new shop** — name + auto-suggested (editable) kebab-case slug,
   optional "convert from lead" dropdown that also sets the lead's
   `converted_shop_id` and `status = 'active'`.
@@ -120,6 +168,7 @@ custom — Pilot is a 30-day/50-intake on-ramp, not on the public table).
 
 ## Non-goals (this PR)
 
-Stripe/billing enforcement, metering, self-serve shop signup, real email
-invite sends, multi-location support, and a public shop directory are all
-explicitly out of scope — see the PR description for the full list.
+Stripe/billing enforcement, metering, real email invite sends, multi-shop
+per user, slug transfer/rename, email verification of contact emails, trial
+expiration enforcement, multi-location support, and a public shop directory
+are all explicitly out of scope — see the PR description for the full list.

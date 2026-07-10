@@ -3,7 +3,12 @@ import { Trash2, X } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { isAdminEmail } from '../../lib/adminAllowlist'
 import { convertLeadToShop, listLeads, updateLeadStatus } from '../../lib/db/shopLeads'
-import { createShop, listShopsWithMemberCounts, updateShop } from '../../lib/db/shops'
+import {
+  createShop,
+  listShopsWithMemberCounts,
+  updateShop,
+  updateShopSignupStatus,
+} from '../../lib/db/shops'
 import { getShopMembersWithEmail } from '../../lib/db/shopMembership'
 import { invite, listPending, revokePending } from '../../lib/db/pendingShopMembers'
 import { isSupabaseConfigured } from '../../lib/supabase'
@@ -58,13 +63,29 @@ function AdminShopsPanel() {
     refresh()
   }
 
+  const handleMarkReviewed = async (id) => {
+    await updateShopSignupStatus(id, 'active')
+    refresh()
+  }
+
+  const handleSuspend = async (id) => {
+    await updateShopSignupStatus(id, 'suspended')
+    refresh()
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-6 py-12">
       <h1 className="text-2xl font-semibold text-text">Admin — Shops</h1>
       {error && <p className="mt-4 text-sm text-danger">{error}</p>}
 
       <LeadsSection leads={leads} loaded={loaded} onStatusChange={handleStatusChange} />
-      <ShopsSection shops={shops} loaded={loaded} onManage={setManagingShop} />
+      <ShopsSection
+        shops={shops}
+        loaded={loaded}
+        onManage={setManagingShop}
+        onMarkReviewed={handleMarkReviewed}
+        onSuspend={handleSuspend}
+      />
       <ProvisionSection leads={leads} onProvisioned={refresh} />
 
       {managingShop && (
@@ -140,31 +161,87 @@ function LeadsSection({ leads, loaded, onStatusChange }) {
   )
 }
 
-function ShopsSection({ shops, loaded, onManage }) {
+function ShopsSection({ shops, loaded, onManage, onMarkReviewed, onSuspend }) {
+  const sortedShops = [...shops].sort((a, b) => {
+    const aPending = a.signup_status === 'pending_review' ? 0 : 1
+    const bPending = b.signup_status === 'pending_review' ? 0 : 1
+    if (aPending !== bPending) return aPending - bPending
+    return new Date(b.created_at) - new Date(a.created_at)
+  })
+
   return (
     <section className="mt-12">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-text-mute">Active shops</h2>
       <div className="mt-4 space-y-2">
-        {shops.map((shop) => (
+        {sortedShops.map((shop) => (
           <div
             key={shop.id}
             className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-panel px-4 py-3"
           >
             <div>
-              <p className="text-sm font-medium text-text">
-                {shop.name} <span className="text-text-mute">/{shop.slug}</span>
-              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium text-text">
+                  {shop.name} <span className="text-text-mute">/{shop.slug}</span>
+                </p>
+                {shop.signup_status === 'pending_review' && (
+                  <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-400">
+                    Pending review
+                  </span>
+                )}
+                {shop.signup_status === 'suspended' && (
+                  <span className="rounded-full bg-danger/20 px-2 py-0.5 text-xs font-medium text-danger">
+                    Suspended
+                  </span>
+                )}
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    shop.signup_source === 'self_serve'
+                      ? 'bg-brand/20 text-brand'
+                      : 'bg-line/60 text-text-mute'
+                  }`}
+                >
+                  {shop.signup_source === 'self_serve' ? 'Self-serve' : 'Admin'}
+                </span>
+              </div>
               <p className="text-xs text-text-mute">
                 {shop.memberCount} member{shop.memberCount === 1 ? '' : 's'} · {shop.plan || 'no plan'}{' '}
                 · created {new Date(shop.created_at).toLocaleDateString()}
+                {shop.signup_source === 'self_serve' && shop.created_by_email && (
+                  <> · created by {shop.created_by_email}</>
+                )}
               </p>
             </div>
-            <button
-              onClick={() => onManage(shop)}
-              className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-text hover:border-brand/50"
-            >
-              Manage
-            </button>
+            <div className="flex items-center gap-2">
+              {shop.signup_status === 'pending_review' && (
+                <button
+                  onClick={() => onMarkReviewed(shop.id)}
+                  className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-text hover:border-brand/50"
+                >
+                  Mark reviewed
+                </button>
+              )}
+              {shop.signup_status !== 'suspended' ? (
+                <button
+                  onClick={() => onSuspend(shop.id)}
+                  className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-danger hover:border-danger/50"
+                >
+                  Suspend
+                </button>
+              ) : (
+                <button
+                  onClick={() => onMarkReviewed(shop.id)}
+                  className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-text hover:border-brand/50"
+                >
+                  Reinstate
+                </button>
+              )}
+              <button
+                onClick={() => onManage(shop)}
+                className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-text hover:border-brand/50"
+              >
+                Manage
+              </button>
+            </div>
           </div>
         ))}
         {loaded && shops.length === 0 && <p className="text-sm text-text-dim">No shops yet.</p>}
