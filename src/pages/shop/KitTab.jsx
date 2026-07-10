@@ -310,17 +310,46 @@ export default function KitTab() {
             <Download size={15} /> Download PNG
           </button>
           <button
-            onClick={downloadLetterPdf}
-            className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-ink hover:bg-brand-dim"
-          >
-            <Download size={15} /> Download PDF
-          </button>
-          <button
             onClick={copyLink}
             className="inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2.5 text-sm font-medium text-text hover:border-brand/50"
           >
             <Copy size={15} /> {copied ? 'Copied!' : 'Copy link'}
           </button>
+        </div>
+
+        <div className="mt-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-mute">
+            Print & post
+          </p>
+          <div className="mt-3 grid gap-4 sm:grid-cols-3">
+            <div>
+              <button
+                onClick={downloadLetterPdf}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-ink hover:bg-brand-dim"
+              >
+                <Download size={15} /> Letter (11" × 8.5") flyer
+              </button>
+              <p className="mt-1.5 text-xs text-text-mute">Full-size flyer for the wall.</p>
+            </div>
+            <div>
+              <button
+                onClick={downloadCounterCardPdf}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-ink hover:bg-brand-dim"
+              >
+                <Download size={15} /> Counter card (5.5" × 8.5")
+              </button>
+              <p className="mt-1.5 text-xs text-text-mute">Laminated card for the intake desk.</p>
+            </div>
+            <div>
+              <button
+                onClick={downloadTableTentPdf}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-ink hover:bg-brand-dim"
+              >
+                <Download size={15} /> Table tent (folded 5.5" × 8.5")
+              </button>
+              <p className="mt-1.5 text-xs text-text-mute">Folds to stand up in the waiting area.</p>
+            </div>
+          </div>
         </div>
       </div>
 
