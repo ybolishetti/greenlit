@@ -2,10 +2,7 @@ import { requireSupabase } from '../supabase'
 
 export async function listShopsWithMemberCounts() {
   const sb = requireSupabase()
-  const { data: shops, error } = await sb
-    .from('shops')
-    .select('id, slug, name, plan, address, contact_email, contact_phone, timezone, created_at')
-    .order('created_at', { ascending: false })
+  const { data: shops, error } = await sb.rpc('list_shops_admin')
   if (error) throw error
 
   const { data: members, error: memberError } = await sb.from('shop_members').select('shop_id')
@@ -17,6 +14,12 @@ export async function listShopsWithMemberCounts() {
   }
 
   return (shops || []).map((shop) => ({ ...shop, memberCount: counts[shop.id] || 0 }))
+}
+
+export async function updateShopSignupStatus(shopId, status) {
+  const sb = requireSupabase()
+  const { error } = await sb.from('shops').update({ signup_status: status }).eq('id', shopId)
+  if (error) throw error
 }
 
 export async function createShop({ name, slug }) {
