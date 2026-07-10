@@ -120,11 +120,35 @@ export default function ForShops() {
       <Hero />
       <HowItWorks />
       <ValueProps />
+      <SelfServeCta />
       <Pricing />
       <FAQ />
       <ContactSection />
       <FooterCta />
     </div>
+  )
+}
+
+function SelfServeCta() {
+  return (
+    <section className="border-t border-line/60 bg-panel/40">
+      <div className="mx-auto max-w-3xl px-6 py-16 text-center">
+        <h2 className="text-2xl font-semibold text-white">Ready to try it yourself?</h2>
+        <p className="mx-auto mt-2 max-w-xl text-white/50">
+          Set up your shop in 30 seconds. Free 30-day pilot, up to 50 intakes, no credit card.
+        </p>
+        <Link
+          to="/for-shops/signup"
+          className="mt-6 inline-flex items-center gap-2 rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-ink hover:bg-brand-dim transition-colors"
+        >
+          Start your shop
+          <ArrowRight size={16} />
+        </Link>
+        <p className="mt-4 text-sm text-white/40">
+          Want to talk it through first? <a href="#contact" className="text-brand hover:underline">Talk to us</a> instead.
+        </p>
+      </div>
+    </section>
   )
 }
 
