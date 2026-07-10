@@ -66,6 +66,51 @@ function renderPanel(
     }
   }
 
+  if (layout === 'split') {
+    const margin = width * 0.04
+    const qrSize = Math.max(40, Math.min(height * 0.5, width * 0.35))
+    const qrX = margin
+    const qrY = (height - qrSize) / 2
+
+    doc.setDrawColor(...BRAND)
+    doc.setLineWidth(0.6)
+    rectAt(qrX - 3, qrY - 3, qrSize + 6, qrSize + 6)
+    image(qrX, qrY, qrSize, qrSize)
+
+    const textX = qrX + qrSize + margin * 1.5
+    const textWidth = width - textX - margin
+    let cursorY = height * 0.2
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11 * scale)
+    doc.setTextColor(...BRAND)
+    text(textX, cursorY, 'GREENLIT')
+    cursorY += height * 0.09
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(24 * scale)
+    doc.setTextColor(...DARK)
+    text(textX, cursorY, shopName)
+    cursorY += height * 0.13
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9.5 * scale)
+    doc.setTextColor(...MED_GREY)
+    const headlineLines = doc.splitTextToSize(headline, textWidth)
+    headlineLines.forEach((line, i) => text(textX, cursorY + i * height * 0.075, line))
+    cursorY += headlineLines.length * height * 0.075 + height * 0.04
+
+    doc.setFontSize(9 * scale)
+    doc.setTextColor(...DARK)
+    STEPS.forEach((step, i) => text(textX, cursorY + i * height * 0.095, step))
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+    doc.setTextColor(...LIGHT_GREY)
+    text(width / 2, height - height * 0.05, FOOTER_LINE, { align: 'center' })
+    return
+  }
+
   // 'stack' layout: centered vertical flow, used by the letter and both table-tent panels
   const cx = width / 2
 
@@ -151,6 +196,33 @@ export default function KitTab() {
     renderPanel(doc, { x: 0, y: 0, width, height, shopName: shop?.name || slug, headline: HEADLINE, qrDataUrl })
 
     doc.save(`greenlit-qr-letter-${slug}.pdf`)
+  }
+
+  const downloadCounterCardPdf = () => {
+    const canvas = getCanvas()
+    if (!canvas) return
+    const qrDataUrl = canvas.toDataURL('image/png')
+    const doc = new jsPDF({ unit: 'mm', format: [215.9, 139.7], orientation: 'landscape' })
+    const width = doc.internal.pageSize.getWidth()
+    const height = doc.internal.pageSize.getHeight()
+    const barWidth = 5
+
+    doc.setFillColor(...BRAND)
+    doc.rect(0, 0, barWidth, height, 'F')
+
+    renderPanel(doc, {
+      x: barWidth,
+      y: 0,
+      width: width - barWidth,
+      height,
+      scale: 0.75,
+      layout: 'split',
+      shopName: shop?.name || slug,
+      headline: HEADLINE,
+      qrDataUrl,
+    })
+
+    doc.save(`greenlit-qr-counter-${slug}.pdf`)
   }
 
   const copyLink = async () => {
