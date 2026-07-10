@@ -58,6 +58,17 @@ function ShopLayoutInner({ slug, session }) {
     return <Navigate to="/" replace />
   }
 
+  if (loaded && shop?.signup_status === 'suspended') {
+    return (
+      <div className="mx-auto max-w-md px-6 py-24 text-center">
+        <h1 className="text-xl font-semibold text-text">Shop suspended</h1>
+        <p className="mt-3 text-sm text-text-dim">
+          This shop is currently suspended. Contact hello@greenlit.co to restore access.
+        </p>
+      </div>
+    )
+  }
+
   const handleSignOut = async () => {
     await signOut()
     navigate('/')

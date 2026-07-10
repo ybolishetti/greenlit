@@ -25,7 +25,7 @@ export async function getShopBySlug(slug) {
   const sb = requireSupabase()
   const { data, error } = await sb
     .from('shops')
-    .select('id, slug, name, plan, address, contact_email, contact_phone, timezone')
+    .select('id, slug, name, plan, address, contact_email, contact_phone, timezone, signup_status')
     .eq('slug', slug)
     .maybeSingle()
   if (error) throw error

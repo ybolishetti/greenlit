@@ -16,11 +16,20 @@ const AuthContext = createContext(null)
 
 const SHOP_SCOPED_PREFIXES = ['/shop/', '/intake', '/i/', '/admin']
 
-function redirectShopMemberIfNeeded(navigate, memberships) {
+function redirectShopMemberIfNeeded(navigate, memberships, showToast) {
   if (!memberships.length) return
   const path = window.location.pathname
   if (SHOP_SCOPED_PREFIXES.some((prefix) => path.startsWith(prefix))) return
-  navigate(`/shop/${memberships[0].shops.slug}`)
+
+  const membership = memberships[0]
+  if (membership.shops?.signup_status === 'suspended') {
+    if (path === '/') return
+    navigate('/', { replace: true })
+    showToast?.('This shop is suspended. Contact hello@greenlit.co.')
+    return
+  }
+
+  navigate(`/shop/${membership.shops.slug}`)
 }
 
 export function AuthProvider({ children }) {
@@ -73,7 +82,7 @@ export function AuthProvider({ children }) {
           }
           const memberships = await getShopMembershipsForUser(s.user.id).catch(() => [])
           setShopMemberships(memberships)
-          redirectShopMemberIfNeeded(navigate, memberships)
+          redirectShopMemberIfNeeded(navigate, memberships, showToast)
         }
         setLoading(false)
       })
@@ -97,7 +106,7 @@ export function AuthProvider({ children }) {
         setShopMemberships(memberships)
 
         if (memberships.length > 0) {
-          redirectShopMemberIfNeeded(navigate, memberships)
+          redirectShopMemberIfNeeded(navigate, memberships, showToast)
           modalRef.current?.onAuthSuccess?.()
           setModal(null)
           return
