@@ -4,6 +4,166 @@ import { QRCodeCanvas } from 'qrcode.react'
 import { jsPDF } from 'jspdf'
 import { Copy, Download, ExternalLink } from 'lucide-react'
 
+const BRAND = [76, 175, 107]
+const DARK = [20, 20, 20]
+const MED_GREY = [60, 60, 60]
+const LIGHT_GREY = [140, 140, 140]
+const FOOTER_LINE = 'Powered by Greenlit  •  greenlit-six.vercel.app'
+const HEADLINE = 'Skip the line — scan to describe your car’s problem'
+const STEPS = [
+  '1. Scan the QR code',
+  '2. Describe the issue in your own words',
+  '3. We text you back a shop-ready brief',
+]
+
+// Draws the shared brand content block (wordmark, shop name, headline, QR, steps, footer)
+// inside a panel rect. jsPDF's doc.text() rotates around the exact (x, y) you pass, but
+// addImage's rotation pivots around a different corner implied by its internal transform
+// order — to keep a 180°-rotated image inside the same visual box, the coordinates passed
+// to addImage must be offset by (+width, -height) from that box's top-left corner.
+function renderPanel(
+  doc,
+  { x, y, width, height, scale = 1, rotate180 = false, layout = 'stack', shopName, headline, qrDataUrl }
+) {
+  const angle = rotate180 ? 180 : 0
+
+  const point = (px, py) =>
+    rotate180 ? { X: x + width - px, Y: y + height - py } : { X: x + px, Y: y + py }
+
+  // jsPDF's built-in `align: 'center'` doesn't recompose correctly with `angle` rotation
+  // (verified against source — the alignment offset gets applied in the wrong direction
+  // once a rotation matrix is involved), so center alignment is computed by hand here
+  // instead of passed through to doc.text.
+  const text = (px, py, str, opts = {}) => {
+    const { align, ...rest } = opts
+    const localX = align === 'center' ? px - doc.getTextWidth(str) / 2 : px
+    const p = point(localX, py)
+    doc.text(p.X, p.Y, str, { ...rest, angle })
+  }
+
+  const rectAt = (rx, ry, rw, rh, mode) => {
+    const p = rotate180
+      ? { X: x + width - rx - rw, Y: y + height - ry - rh }
+      : { X: x + rx, Y: y + ry }
+    doc.rect(p.X, p.Y, rw, rh, mode)
+  }
+
+  const image = (qx, qy, qw, qh) => {
+    if (!rotate180) {
+      doc.addImage(qrDataUrl, 'PNG', x + qx, y + qy, qw, qh)
+    } else {
+      doc.addImage(
+        qrDataUrl,
+        'PNG',
+        x + width - qx,
+        y + height - qy - 2 * qh,
+        qw,
+        qh,
+        undefined,
+        'FAST',
+        180
+      )
+    }
+  }
+
+  if (layout === 'split') {
+    const margin = width * 0.04
+    const qrSize = Math.max(40, Math.min(height * 0.5, width * 0.35))
+    const qrX = margin
+    const qrY = (height - qrSize) / 2
+
+    doc.setDrawColor(...BRAND)
+    doc.setLineWidth(0.6)
+    rectAt(qrX - 3, qrY - 3, qrSize + 6, qrSize + 6)
+    image(qrX, qrY, qrSize, qrSize)
+
+    const textX = qrX + qrSize + margin * 1.5
+    const textWidth = width - textX - margin
+    let cursorY = height * 0.2
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11 * scale)
+    doc.setTextColor(...BRAND)
+    text(textX, cursorY, 'GREENLIT')
+    cursorY += height * 0.09
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(24 * scale)
+    doc.setTextColor(...DARK)
+    text(textX, cursorY, shopName)
+    cursorY += height * 0.13
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9.5 * scale)
+    doc.setTextColor(...MED_GREY)
+    const headlineLines = doc.splitTextToSize(headline, textWidth)
+    headlineLines.forEach((line, i) => text(textX, cursorY + i * height * 0.075, line))
+    cursorY += headlineLines.length * height * 0.075 + height * 0.04
+
+    doc.setFontSize(9 * scale)
+    doc.setTextColor(...DARK)
+    STEPS.forEach((step, i) => text(textX, cursorY + i * height * 0.095, step))
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+    doc.setTextColor(...LIGHT_GREY)
+    text(width / 2, height - height * 0.05, FOOTER_LINE, { align: 'center' })
+    return
+  }
+
+  // 'stack' layout: centered vertical flow, used by the letter and both table-tent panels
+  const cx = width / 2
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11 * scale)
+  doc.setTextColor(...BRAND)
+  text(cx, height * 0.1, 'GREENLIT', { align: 'center' })
+
+  const lineW = 16 * scale
+  doc.setFillColor(...BRAND)
+  rectAt(cx - lineW / 2, height * 0.12, lineW, 0.8, 'F')
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(24 * scale)
+  doc.setTextColor(...DARK)
+  text(cx, height * 0.22, shopName, { align: 'center' })
+
+  const headlineY = height * 0.3
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(11 * scale)
+  doc.setTextColor(...MED_GREY)
+  text(cx, headlineY, headline, { align: 'center' })
+
+  // The QR (plus its 3mm border) is the one non-negotiable block — it must stay >=40mm
+  // even on the tent's ~108mm-tall panel. Everything below it uses fixed mm gaps (not
+  // fractions of height) so it stays legible on the smallest panel; the footer then
+  // snaps to whichever is further down, the tight computed position or a comfortable
+  // fixed margin from the bottom, so the letter's much taller panel doesn't look cramped.
+  const qrSize = Math.max(40, Math.min(height * 0.34, width * 0.5))
+  const qrX = cx - qrSize / 2
+  const qrY = headlineY + 8
+  const qrBorder = 3
+
+  doc.setDrawColor(...BRAND)
+  doc.setLineWidth(0.6)
+  rectAt(qrX - qrBorder, qrY - qrBorder, qrSize + qrBorder * 2, qrSize + qrBorder * 2)
+  image(qrX, qrY, qrSize, qrSize)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9.5 * scale)
+  doc.setTextColor(...DARK)
+  const stepGap = 5.5
+  const stepsStartY = qrY + qrSize + qrBorder + 5
+  STEPS.forEach((step, i) => text(cx, stepsStartY + i * stepGap, step, { align: 'center' }))
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(...LIGHT_GREY)
+  const lastStepY = stepsStartY + (STEPS.length - 1) * stepGap
+  const footerY = Math.max(lastStepY + 5, height - 12)
+  text(cx, footerY, FOOTER_LINE, { align: 'center' })
+}
+
 export default function KitTab() {
   const { shop, slug } = useOutletContext()
   const qrWrapRef = useRef(null)
@@ -21,57 +181,84 @@ export default function KitTab() {
     link.click()
   }
 
-  const downloadPdf = () => {
+  const downloadLetterPdf = () => {
     const canvas = getCanvas()
     if (!canvas) return
-    const dataUrl = canvas.toDataURL('image/png')
-    const doc = new jsPDF()
-    const pageWidth = doc.internal.pageSize.getWidth()
-    const pageHeight = doc.internal.pageSize.getHeight()
+    const qrDataUrl = canvas.toDataURL('image/png')
+    const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'landscape' })
+    const width = doc.internal.pageSize.getWidth()
+    const height = doc.internal.pageSize.getHeight()
 
-    doc.setFillColor(76, 175, 107)
-    doc.rect(0, 0, pageWidth, 8, 'F')
+    doc.setFillColor(...BRAND)
+    doc.rect(0, 0, width, 3, 'F')
+    doc.rect(0, height - 3, width, 3, 'F')
 
-    doc.setFontSize(22)
-    doc.setTextColor(76, 175, 107)
-    doc.text('GREENLIT', pageWidth / 2, 32, { align: 'center' })
+    renderPanel(doc, { x: 0, y: 0, width, height, shopName: shop?.name || slug, headline: HEADLINE, qrDataUrl })
 
-    doc.setFontSize(16)
-    doc.setTextColor(20, 20, 20)
-    doc.text(shop?.name || slug, pageWidth / 2, 44, { align: 'center' })
+    doc.save(`greenlit-qr-letter-${slug}.pdf`)
+  }
 
-    doc.setFontSize(12)
-    doc.setTextColor(60, 60, 60)
-    doc.text('Skip the line — scan to describe your car’s problem', pageWidth / 2, 54, {
-      align: 'center',
+  const downloadCounterCardPdf = () => {
+    const canvas = getCanvas()
+    if (!canvas) return
+    const qrDataUrl = canvas.toDataURL('image/png')
+    const doc = new jsPDF({ unit: 'mm', format: [215.9, 139.7], orientation: 'landscape' })
+    const width = doc.internal.pageSize.getWidth()
+    const height = doc.internal.pageSize.getHeight()
+    const barWidth = 5
+
+    doc.setFillColor(...BRAND)
+    doc.rect(0, 0, barWidth, height, 'F')
+
+    renderPanel(doc, {
+      x: barWidth,
+      y: 0,
+      width: width - barWidth,
+      height,
+      scale: 0.75,
+      layout: 'split',
+      shopName: shop?.name || slug,
+      headline: HEADLINE,
+      qrDataUrl,
     })
 
-    const qrSize = 90
-    const qrY = 68
-    doc.setDrawColor(76, 175, 107)
-    doc.setLineWidth(1)
-    doc.rect((pageWidth - qrSize) / 2 - 4, qrY - 4, qrSize + 8, qrSize + 8)
-    doc.addImage(dataUrl, 'PNG', (pageWidth - qrSize) / 2, qrY, qrSize, qrSize)
+    doc.save(`greenlit-qr-counter-${slug}.pdf`)
+  }
 
-    doc.setFontSize(11)
-    doc.setTextColor(20, 20, 20)
-    const steps = [
-      '1. Scan the QR code',
-      '2. Describe the issue in your own words',
-      '3. We text you back a shop-ready brief',
-    ]
-    steps.forEach((step, i) => {
-      doc.text(step, pageWidth / 2, qrY + qrSize + 16 + i * 7, { align: 'center' })
+  const downloadTableTentPdf = () => {
+    const canvas = getCanvas()
+    if (!canvas) return
+    const qrDataUrl = canvas.toDataURL('image/png')
+    const doc = new jsPDF({ unit: 'mm', format: [139.7, 215.9], orientation: 'portrait' })
+    const width = doc.internal.pageSize.getWidth()
+    const height = doc.internal.pageSize.getHeight()
+    const panelHeight = height / 2
+
+    renderPanel(doc, {
+      x: 0,
+      y: 0,
+      width,
+      height: panelHeight,
+      rotate180: true,
+      shopName: shop?.name || slug,
+      headline: HEADLINE,
+      qrDataUrl,
+    })
+    renderPanel(doc, {
+      x: 0,
+      y: panelHeight,
+      width,
+      height: panelHeight,
+      shopName: shop?.name || slug,
+      headline: HEADLINE,
+      qrDataUrl,
     })
 
-    doc.setFontSize(9)
-    doc.setTextColor(140, 140, 140)
-    doc.text(qrUrl, pageWidth / 2, pageHeight - 15, { align: 'center' })
+    doc.setFillColor(...BRAND)
+    doc.rect(0, panelHeight - 1, width, 1, 'F')
+    doc.rect(0, panelHeight, width, 1, 'F')
 
-    doc.setFillColor(76, 175, 107)
-    doc.rect(0, pageHeight - 6, pageWidth, 6, 'F')
-
-    doc.save(`greenlit-qr-kit-${slug}.pdf`)
+    doc.save(`greenlit-qr-tent-${slug}.pdf`)
   }
 
   const copyLink = async () => {
@@ -123,17 +310,46 @@ export default function KitTab() {
             <Download size={15} /> Download PNG
           </button>
           <button
-            onClick={downloadPdf}
-            className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-ink hover:bg-brand-dim"
-          >
-            <Download size={15} /> Download PDF
-          </button>
-          <button
             onClick={copyLink}
             className="inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2.5 text-sm font-medium text-text hover:border-brand/50"
           >
             <Copy size={15} /> {copied ? 'Copied!' : 'Copy link'}
           </button>
+        </div>
+
+        <div className="mt-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-mute">
+            Print & post
+          </p>
+          <div className="mt-3 grid gap-4 sm:grid-cols-3">
+            <div>
+              <button
+                onClick={downloadLetterPdf}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-ink hover:bg-brand-dim"
+              >
+                <Download size={15} /> Letter (11" × 8.5") flyer
+              </button>
+              <p className="mt-1.5 text-xs text-text-mute">Full-size flyer for the wall.</p>
+            </div>
+            <div>
+              <button
+                onClick={downloadCounterCardPdf}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-ink hover:bg-brand-dim"
+              >
+                <Download size={15} /> Counter card (5.5" × 8.5")
+              </button>
+              <p className="mt-1.5 text-xs text-text-mute">Laminated card for the intake desk.</p>
+            </div>
+            <div>
+              <button
+                onClick={downloadTableTentPdf}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-ink hover:bg-brand-dim"
+              >
+                <Download size={15} /> Table tent (folded 5.5" × 8.5")
+              </button>
+              <p className="mt-1.5 text-xs text-text-mute">Folds to stand up in the waiting area.</p>
+            </div>
+          </div>
         </div>
       </div>
 
