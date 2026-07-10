@@ -225,6 +225,42 @@ export default function KitTab() {
     doc.save(`greenlit-qr-counter-${slug}.pdf`)
   }
 
+  const downloadTableTentPdf = () => {
+    const canvas = getCanvas()
+    if (!canvas) return
+    const qrDataUrl = canvas.toDataURL('image/png')
+    const doc = new jsPDF({ unit: 'mm', format: [139.7, 215.9], orientation: 'portrait' })
+    const width = doc.internal.pageSize.getWidth()
+    const height = doc.internal.pageSize.getHeight()
+    const panelHeight = height / 2
+
+    renderPanel(doc, {
+      x: 0,
+      y: 0,
+      width,
+      height: panelHeight,
+      rotate180: true,
+      shopName: shop?.name || slug,
+      headline: HEADLINE,
+      qrDataUrl,
+    })
+    renderPanel(doc, {
+      x: 0,
+      y: panelHeight,
+      width,
+      height: panelHeight,
+      shopName: shop?.name || slug,
+      headline: HEADLINE,
+      qrDataUrl,
+    })
+
+    doc.setFillColor(...BRAND)
+    doc.rect(0, panelHeight - 1, width, 1, 'F')
+    doc.rect(0, panelHeight, width, 1, 'F')
+
+    doc.save(`greenlit-qr-tent-${slug}.pdf`)
+  }
+
   const copyLink = async () => {
     await navigator.clipboard.writeText(qrUrl)
     setCopied(true)
