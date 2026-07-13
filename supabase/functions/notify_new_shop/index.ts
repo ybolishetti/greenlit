@@ -6,7 +6,7 @@ const corsHeaders = {
 }
 
 // Hard-coded for pilot — later this becomes a proper admin_emails-driven query.
-const RECIPIENTS = ['yashbolishetti@gmail.com', 'alexmoldovean12@gmail.com']
+const RECIPIENTS = ['apexhermes13@gmail.com']
 
 const ADMIN_PANEL_URL = 'https://greenlit-six.vercel.app/admin/shops'
 

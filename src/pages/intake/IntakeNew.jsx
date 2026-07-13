@@ -20,7 +20,7 @@ export default function IntakeNew() {
   const [modality, setModality] = useState(null)
   const [audioBlob, setAudioBlob] = useState(null)
   const [videoBlob, setVideoBlob] = useState(null)
-  const [photoFile, setPhotoFile] = useState(null)
+  const [photoFiles, setPhotoFiles] = useState([])
   const [text, setText] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -29,7 +29,7 @@ export default function IntakeNew() {
     if (!modality) return false
     if (modality === 'audio') return !!audioBlob
     if (modality === 'video') return !!videoBlob
-    if (modality === 'photo') return !!photoFile
+    if (modality === 'photo') return photoFiles.length > 0
     if (modality === 'text') return text.trim().length > 0
     return false
   }
@@ -55,15 +55,22 @@ export default function IntakeNew() {
           kind: 'video',
           file: new File([videoBlob], 'recording.webm', { type: videoBlob.type || 'video/webm' }),
         })
-      } else if (modality === 'photo' && photoFile) {
-        await uploadMedia(intake.id, { kind: 'photo', file: photoFile })
+      } else if (modality === 'photo' && photoFiles?.length) {
+        for (const file of photoFiles) {
+          await uploadMedia(intake.id, { kind: 'photo', file })
+        }
       } else if (modality === 'text') {
         await uploadMedia(intake.id, { kind: 'text', textContent: text.trim() })
       }
 
       navigate(`/intake/${intake.id}`)
     } catch (err) {
-      setError(err.message || 'Failed to start intake')
+      console.error(err)
+      const msg = err.message || 'Failed to start intake'
+      const friendly = msg.includes('row-level security')
+        ? "We couldn't save your intake. Please refresh and try again — if it keeps happening, let the shop know."
+        : msg
+      setError(friendly)
       setSubmitting(false)
     }
   }
@@ -110,7 +117,7 @@ export default function IntakeNew() {
               {modality === 'audio' && <AudioRecorder onCapture={setAudioBlob} />}
               {modality === 'video' && <VideoRecorder onCapture={setVideoBlob} />}
               {modality === 'photo' && (
-                <PhotoUpload onCapture={(files) => setPhotoFile(files?.[0] ?? null)} single />
+                <PhotoUpload onCapture={(files) => setPhotoFiles(files ?? [])} />
               )}
               {modality === 'text' && (
                 <textarea

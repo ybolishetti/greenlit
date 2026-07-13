@@ -26,11 +26,16 @@ export default function AudioRecorder({ onCapture, onChange }) {
     setError(null)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const recorder = new MediaRecorder(stream)
+      const mime = MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/mp4')
+          ? 'audio/mp4'
+          : ''
+      const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
       chunksRef.current = []
       recorder.ondataavailable = (e) => chunksRef.current.push(e.data)
       recorder.onstop = () => {
-        const b = new Blob(chunksRef.current, { type: 'audio/webm' })
+        const b = new Blob(chunksRef.current, { type: mime || 'audio/webm' })
         setBlob(b)
         setAudioUrl(URL.createObjectURL(b))
         stream.getTracks().forEach((t) => t.stop())
@@ -97,7 +102,13 @@ export default function AudioRecorder({ onCapture, onChange }) {
             <Upload size={14} />
             Upload audio file instead
           </button>
-          <input ref={fileInputRef} type="file" accept="audio/*" className="hidden" onChange={handleUpload} />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="audio/*,.m4a,.mp3,.wav,.webm"
+            className="hidden"
+            onChange={handleUpload}
+          />
           {error && <p className="text-xs text-danger">{error}</p>}
         </div>
       )}

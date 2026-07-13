@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
 import { Camera, X } from 'lucide-react'
 
+const MAX_PHOTOS = 6
+
 export default function PhotoUpload({ onChange, onCapture, single = false }) {
   const [previews, setPreviews] = useState([])
   const [files, setFiles] = useState([])
@@ -19,8 +21,11 @@ export default function PhotoUpload({ onChange, onCapture, single = false }) {
     if (single) {
       emit([picked[0]], [urls[0]])
     } else {
-      emit([...files, ...picked], [...previews, ...urls])
+      const nextFiles = [...files, ...picked].slice(0, MAX_PHOTOS)
+      const nextPreviews = [...previews, ...urls].slice(0, MAX_PHOTOS)
+      emit(nextFiles, nextPreviews)
     }
+    e.target.value = ''
   }
 
   const remove = (idx) => {
@@ -43,7 +48,7 @@ export default function PhotoUpload({ onChange, onCapture, single = false }) {
             </button>
           </div>
         ))}
-        {(!single || previews.length === 0) && (
+        {(single ? previews.length === 0 : previews.length < MAX_PHOTOS) && (
           <button
             onClick={() => inputRef.current?.click()}
             className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-line text-text-mute hover:border-brand/50 hover:text-brand"
@@ -63,6 +68,7 @@ export default function PhotoUpload({ onChange, onCapture, single = false }) {
       />
       <p className="mt-3 text-xs text-text-mute">
         Fluid leaks, dashboard lights, tire wear, visible damage — whatever's relevant.
+        {!single && ` Max ${MAX_PHOTOS} photos.`}
       </p>
     </div>
   )
