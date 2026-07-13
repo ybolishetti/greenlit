@@ -12,6 +12,7 @@ export default function VideoRecorder({ onCapture }) {
   const streamRef = useRef(null)
   const chunksRef = useRef([])
   const timerRef = useRef(null)
+  const videoRef = useRef(null)
 
   useEffect(() => {
     onCapture?.(blob)
@@ -27,14 +28,21 @@ export default function VideoRecorder({ onCapture }) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       streamRef.current = stream
-      const recorder = new MediaRecorder(stream)
+      if (videoRef.current) videoRef.current.srcObject = stream
+      const mime = MediaRecorder.isTypeSupported('video/webm')
+        ? 'video/webm'
+        : MediaRecorder.isTypeSupported('video/mp4')
+          ? 'video/mp4'
+          : ''
+      const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
       chunksRef.current = []
       recorder.ondataavailable = (e) => chunksRef.current.push(e.data)
       recorder.onstop = () => {
-        const b = new Blob(chunksRef.current, { type: 'video/webm' })
+        const b = new Blob(chunksRef.current, { type: mime || 'video/webm' })
         setBlob(b)
         setPreviewUrl(URL.createObjectURL(b))
         stream.getTracks().forEach((t) => t.stop())
+        if (videoRef.current) videoRef.current.srcObject = null
       }
       recorder.start()
       recorderRef.current = recorder
@@ -50,12 +58,14 @@ export default function VideoRecorder({ onCapture }) {
     recorderRef.current?.stop()
     setRecording(false)
     clearInterval(timerRef.current)
+    if (videoRef.current) videoRef.current.srcObject = null
   }
 
   const clear = () => {
     setBlob(null)
     setPreviewUrl(null)
     setSeconds(0)
+    if (videoRef.current) videoRef.current.srcObject = null
   }
 
   const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
@@ -76,6 +86,13 @@ export default function VideoRecorder({ onCapture }) {
       )}
       {recording && (
         <div className="flex flex-col items-center gap-4 py-6 text-center">
+          <video
+            ref={videoRef}
+            muted
+            autoPlay
+            playsInline
+            className="w-full rounded-lg border border-line"
+          />
           <button
             onClick={stop}
             className="flex h-16 w-16 items-center justify-center rounded-full bg-danger text-white animate-pulse"

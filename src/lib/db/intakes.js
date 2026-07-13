@@ -38,7 +38,14 @@ export async function createIntake({ shopSlug, vehicle } = {}) {
   const shopId = shopSlug ? await resolveShopId(shopSlug) : null
   const { data, error } = await sb
     .from('intakes')
-    .insert({ shop_id: shopId, vehicle: vehicle ?? null })
+    .insert({
+      shop_id: shopId,
+      vehicle: vehicle ?? null,
+      status: 'in_progress',
+      brief: null,
+      urgency: null,
+      category: null,
+    })
     .select('id, shop_id, status, vehicle, created_at')
     .single()
   if (error) throw error
