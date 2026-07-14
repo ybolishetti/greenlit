@@ -1,12 +1,13 @@
 import { useRef, useState } from 'react'
-import { Camera, X } from 'lucide-react'
+import { Camera, Upload, X } from 'lucide-react'
 
 const MAX_PHOTOS = 6
 
 export default function PhotoUpload({ onChange, onCapture, single = false }) {
   const [previews, setPreviews] = useState([])
   const [files, setFiles] = useState([])
-  const inputRef = useRef(null)
+  const cameraInputRef = useRef(null)
+  const uploadInputRef = useRef(null)
 
   const emit = (nextFiles, nextPreviews) => {
     setFiles(nextFiles)
@@ -49,19 +50,36 @@ export default function PhotoUpload({ onChange, onCapture, single = false }) {
           </div>
         ))}
         {(single ? previews.length === 0 : previews.length < MAX_PHOTOS) && (
-          <button
-            onClick={() => inputRef.current?.click()}
-            className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-line text-text-mute hover:border-brand/50 hover:text-brand"
-          >
-            <Camera size={18} />
-            <span className="text-[10px]">Add photo</span>
-          </button>
+          <>
+            <button
+              onClick={() => cameraInputRef.current?.click()}
+              className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-line text-text-mute hover:border-brand/50 hover:text-brand"
+            >
+              <Camera size={18} />
+              <span className="text-[10px]">Take photo</span>
+            </button>
+            <button
+              onClick={() => uploadInputRef.current?.click()}
+              className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-line text-text-mute hover:border-brand/50 hover:text-brand"
+            >
+              <Upload size={18} />
+              <span className="text-[10px]">Upload</span>
+            </button>
+          </>
         )}
       </div>
       <input
-        ref={inputRef}
+        ref={cameraInputRef}
         type="file"
-        accept="image/*,video/*"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleFiles}
+      />
+      <input
+        ref={uploadInputRef}
+        type="file"
+        accept="image/*"
         multiple={!single}
         className="hidden"
         onChange={handleFiles}

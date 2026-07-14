@@ -278,7 +278,7 @@ export default function KitTab() {
         </p>
         <div
           ref={qrWrapRef}
-          className="mx-auto mt-5 flex max-w-sm flex-col items-center rounded-2xl border-2 border-brand/40 bg-white p-8"
+          className="mx-auto mt-5 flex max-w-sm flex-col items-center rounded-2xl border-2 border-brand/40 bg-white p-6 sm:p-8"
         >
           <div className="flex items-center gap-2">
             <div className="h-2 w-2 rounded-full bg-brand" />
@@ -293,8 +293,14 @@ export default function KitTab() {
           <p className="text-center text-xs text-ink/60">
             Takes ~2 min. Do it before you're called up.
           </p>
-          <div className="my-5">
-            <QRCodeCanvas value={qrUrl} size={220} level="M" includeMargin={false} />
+          <div className="my-5 flex w-full justify-center">
+            <QRCodeCanvas
+              value={qrUrl}
+              size={220}
+              level="M"
+              includeMargin={false}
+              style={{ maxWidth: '100%', height: 'auto' }}
+            />
           </div>
           <p className="text-center text-[10px] uppercase tracking-widest text-ink/40">
             Powered by Greenlit
