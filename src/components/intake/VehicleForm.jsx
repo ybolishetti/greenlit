@@ -9,11 +9,18 @@ const TOP_MAKES = [
 
 const currentYear = new Date().getFullYear()
 
-export default function VehicleForm({ onSubmit, submitting }) {
-  const [year, setYear] = useState('')
-  const [make, setMake] = useState('')
-  const [model, setModel] = useState('')
-  const [mileage, setMileage] = useState('')
+export default function VehicleForm({
+  onSubmit,
+  submitting,
+  showSaveToAccount = false,
+  initialValues,
+  submitLabel = 'Continue',
+}) {
+  const [year, setYear] = useState(initialValues?.year != null ? String(initialValues.year) : '')
+  const [make, setMake] = useState(initialValues?.make ?? '')
+  const [model, setModel] = useState(initialValues?.model ?? '')
+  const [mileage, setMileage] = useState(initialValues?.mileage != null ? String(initialValues.mileage) : '')
+  const [saveToAccount, setSaveToAccount] = useState(true)
   const [error, setError] = useState(null)
 
   const handleSubmit = (e) => {
@@ -46,6 +53,7 @@ export default function VehicleForm({ onSubmit, submitting }) {
       model: model.trim(),
       mileage: mileageNum,
       trim: null,
+      saveToAccount: showSaveToAccount ? saveToAccount : false,
     })
   }
 
@@ -117,13 +125,25 @@ export default function VehicleForm({ onSubmit, submitting }) {
 
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
 
+      {showSaveToAccount && (
+        <label className="mt-4 flex items-center gap-2 text-xs text-text-dim">
+          <input
+            type="checkbox"
+            checked={saveToAccount}
+            onChange={(e) => setSaveToAccount(e.target.checked)}
+            className="rounded border-line"
+          />
+          Save this vehicle to my account for next time
+        </label>
+      )}
+
       <div className="mt-6 flex justify-end">
         <button
           type="submit"
           disabled={submitting}
           className="rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-ink hover:bg-brand-dim disabled:opacity-40"
         >
-          Continue
+          {submitLabel}
         </button>
       </div>
     </form>

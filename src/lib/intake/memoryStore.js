@@ -132,3 +132,64 @@ export function memoryListConsumerIntakes() {
 export function memoryGetConsumerIntake(id) {
   return consumerIntakes.get(id) ?? null
 }
+
+/** Saved vehicles (in-memory when Supabase is not configured). */
+
+const savedVehicles = new Map()
+
+export function memoryListSavedVehicles() {
+  const uid = memoryConsumerUserId
+  if (!uid) return []
+  return [...savedVehicles.values()]
+    .filter((row) => row.user_id === uid)
+    .sort((a, b) => {
+      if (a.is_default !== b.is_default) return a.is_default ? -1 : 1
+      return new Date(b.created_at) - new Date(a.created_at)
+    })
+}
+
+export function memoryCreateSavedVehicle({ year, make, model, mileage, nickname, isDefault }) {
+  const uid = memoryConsumerUserId
+  if (isDefault) {
+    for (const row of savedVehicles.values()) {
+      if (row.user_id === uid) row.is_default = false
+    }
+  }
+  const id = crypto.randomUUID()
+  const row = {
+    id,
+    user_id: uid,
+    year,
+    make,
+    model,
+    mileage: mileage ?? null,
+    nickname: nickname ?? null,
+    is_default: !!isDefault,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }
+  savedVehicles.set(id, row)
+  return row
+}
+
+export function memoryUpdateSavedVehicle(id, patch) {
+  const row = savedVehicles.get(id)
+  if (!row) throw new Error('Saved vehicle not found')
+  Object.assign(row, patch, { updated_at: new Date().toISOString() })
+  return row
+}
+
+export function memoryDeleteSavedVehicle(id) {
+  savedVehicles.delete(id)
+}
+
+export function memorySetDefaultSavedVehicle(id) {
+  const row = savedVehicles.get(id)
+  if (!row) throw new Error('Saved vehicle not found')
+  for (const v of savedVehicles.values()) {
+    if (v.user_id === row.user_id) v.is_default = false
+  }
+  row.is_default = true
+  row.updated_at = new Date().toISOString()
+  return row
+}

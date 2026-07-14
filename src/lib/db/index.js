@@ -29,3 +29,10 @@ export {
   getConsumerIntake,
   debugListConsumerIntakes,
 } from './consumer.js'
+export {
+  listSavedVehicles,
+  createSavedVehicle,
+  updateSavedVehicle,
+  deleteSavedVehicle,
+  setDefaultVehicle,
+} from './savedVehicles.js'

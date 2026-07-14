@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowRight, Loader2 } from 'lucide-react'
 import VehicleForm from '../../components/intake/VehicleForm'
@@ -7,16 +7,20 @@ import AudioRecorder from '../../components/AudioRecorder'
 import VideoRecorder from '../../components/VideoRecorder'
 import PhotoUpload from '../../components/PhotoUpload'
 import ErrorBanner from '../../components/ErrorBanner'
-import { createIntake, uploadMedia, appendMessage } from '../../lib/db'
+import { createIntake, uploadMedia, appendMessage, listSavedVehicles, createSavedVehicle } from '../../lib/db'
 import { isStubMode } from '../../lib/ai/client'
+import { useAuth } from '../../context/AuthContext'
 
 export default function IntakeNew() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const shopSlug = params.get('shop')
+  const { user } = useAuth()
 
   const [step, setStep] = useState(1)
   const [vehicle, setVehicle] = useState(null)
+  const [savedVehicles, setSavedVehicles] = useState([])
+  const [showVehicleForm, setShowVehicleForm] = useState(false)
   const [modality, setModality] = useState(null)
   const [audioBlob, setAudioBlob] = useState(null)
   const [videoBlob, setVideoBlob] = useState(null)
@@ -24,6 +28,36 @@ export default function IntakeNew() {
   const [text, setText] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
+
+  useEffect(() => {
+    if (!user) {
+      setSavedVehicles([])
+      return
+    }
+    listSavedVehicles()
+      .then(setSavedVehicles)
+      .catch((err) => console.error('Failed to load saved vehicles:', err))
+  }, [user])
+
+  const handleVehicleSubmit = ({ saveToAccount, ...vehicleFields }) => {
+    setVehicle(vehicleFields)
+    setStep(2)
+    if (saveToAccount) {
+      createSavedVehicle({
+        year: vehicleFields.year,
+        make: vehicleFields.make,
+        model: vehicleFields.model,
+        mileage: vehicleFields.mileage,
+        nickname: null,
+        isDefault: savedVehicles.length === 0,
+      }).catch((err) => console.error('Failed to save vehicle:', err))
+    }
+  }
+
+  const selectSavedVehicle = (v) => {
+    setVehicle({ year: v.year, make: v.make, model: v.model, mileage: v.mileage, trim: null })
+    setStep(2)
+  }
 
   const canSubmit = () => {
     if (!modality) return false
@@ -46,14 +80,16 @@ export default function IntakeNew() {
       }
 
       if (modality === 'audio' && audioBlob) {
+        const ext = (audioBlob.type?.split('/')[1] || 'webm').split(';')[0]
         await uploadMedia(intake.id, {
           kind: 'audio',
-          file: new File([audioBlob], 'recording.webm', { type: audioBlob.type || 'audio/webm' }),
+          file: new File([audioBlob], `recording.${ext}`, { type: audioBlob.type || 'audio/webm' }),
         })
       } else if (modality === 'video' && videoBlob) {
+        const ext = (videoBlob.type?.split('/')[1] || 'webm').split(';')[0]
         await uploadMedia(intake.id, {
           kind: 'video',
-          file: new File([videoBlob], 'recording.webm', { type: videoBlob.type || 'video/webm' }),
+          file: new File([videoBlob], `recording.${ext}`, { type: videoBlob.type || 'video/webm' }),
         })
       } else if (modality === 'photo' && photoFiles?.length) {
         for (const file of photoFiles) {
@@ -88,13 +124,39 @@ export default function IntakeNew() {
           <h1 className="text-2xl font-semibold text-text">Start your intake</h1>
           <p className="mt-1 text-sm text-text-dim">First, tell us about your vehicle.</p>
           <div className="mt-8">
-            <VehicleForm
-              submitting={submitting}
-              onSubmit={(v) => {
-                setVehicle(v)
-                setStep(2)
-              }}
-            />
+            {savedVehicles.length > 0 && !showVehicleForm && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {savedVehicles.map((v) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => selectSavedVehicle(v)}
+                      className="rounded-xl border border-line bg-panel px-4 py-3 text-left text-sm hover:border-brand/50"
+                    >
+                      <span className="font-medium text-text">
+                        {v.year} {v.make} {v.model}
+                      </span>
+                      {v.nickname && <span className="ml-1 text-text-mute">({v.nickname})</span>}
+                      {v.mileage != null && (
+                        <span className="ml-1 text-text-mute">· {v.mileage.toLocaleString()} mi</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowVehicleForm(true)}
+                  className="text-sm text-text-dim hover:text-text"
+                >
+                  + Add a different vehicle
+                </button>
+              </div>
+            )}
+
+            {(savedVehicles.length === 0 || showVehicleForm) && (
+              <VehicleForm submitting={submitting} showSaveToAccount={!!user} onSubmit={handleVehicleSubmit} />
+            )}
           </div>
         </>
       )}
