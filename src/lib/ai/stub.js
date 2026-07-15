@@ -26,13 +26,29 @@ const ROUND1 = {
   ],
 }
 
-const ROUND2 = {
-  type: 'question_batch',
-  round: 2,
-  questions: [
+function hasFreeformText(payload) {
+  const mediaText = (payload.media_summary ?? []).find(
+    (m) => m.kind === 'text' && typeof m.text_content === 'string' && m.text_content.trim().length > 10,
+  )
+  return Boolean(mediaText)
+}
+
+function pickFreeformPrompt(mediaSummary = []) {
+  const kinds = new Set(mediaSummary.map((m) => m.kind))
+  if (kinds.has('photo') && !kinds.has('audio') && !kinds.has('video')) {
+    return 'Describe what you see or notice in your own words.'
+  }
+  if (kinds.has('audio') || kinds.has('video')) {
+    return 'Describe the sound or feeling in your own words.'
+  }
+  return 'Describe what you notice in your own words.'
+}
+
+function buildRound2(payload) {
+  const questions = [
     {
       id: 'q_stub_4',
-      prompt: 'Describe the sound or feeling in your own words.',
+      prompt: pickFreeformPrompt(payload.media_summary),
       question_intent: 'freeform_description',
       rationale: 'Exact customer language for the brief.',
     },
@@ -42,7 +58,13 @@ const ROUND2 = {
       question_intent: 'warning_lights',
       rationale: 'Warning lights escalate urgency.',
     },
-  ],
+  ]
+  return {
+    type: 'question_batch',
+    round: 2,
+    // Skip q_stub_4 — user already gave a freeform description at intake.
+    questions: hasFreeformText(payload) ? questions.filter((q) => q.id !== 'q_stub_4') : questions,
+  }
 }
 
 function answerMap(messages) {
@@ -161,7 +183,7 @@ export async function stubInterviewer(payload) {
   ).length
 
   if (batches === 0) return ROUND1
-  if (batches === 1) return ROUND2
+  if (batches === 1) return buildRound2(payload)
   return { type: 'done' }
 }
 
@@ -186,6 +208,7 @@ export async function stubDiagnosticianHypothesis(payload) {
       ],
     }
   }
+  // intentionally empty: round-2 stub is high-confidence and done
   return {
     type: 'hypothesis',
     round: 2,

@@ -23,24 +23,33 @@ export default function QuestionField({ question, value, onChange }) {
 
   if (ui.type === 'multi_select') {
     const selected = Array.isArray(value) ? value : []
+    const toggleValue = (optionValue) => {
+      if (!ui.mutexValue) {
+        const active = selected.includes(optionValue)
+        onChange(active ? selected.filter((v) => v !== optionValue) : [...selected, optionValue])
+        return
+      }
+      if (optionValue === ui.mutexValue) {
+        onChange(selected.includes(ui.mutexValue) ? [] : [ui.mutexValue])
+        return
+      }
+      const stripped = selected.filter((v) => v !== ui.mutexValue)
+      onChange(
+        stripped.includes(optionValue)
+          ? stripped.filter((v) => v !== optionValue)
+          : [...stripped, optionValue],
+      )
+    }
     return (
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {ui.options.map((opt) => {
-          const active = selected.includes(opt.value)
-          return (
-            <OptionCard
-              key={opt.value}
-              label={opt.label}
-              selected={active}
-              onClick={() => {
-                const next = active
-                  ? selected.filter((v) => v !== opt.value)
-                  : [...selected, opt.value]
-                onChange(next)
-              }}
-            />
-          )
-        })}
+        {ui.options.map((opt) => (
+          <OptionCard
+            key={opt.value}
+            label={opt.label}
+            selected={selected.includes(opt.value)}
+            onClick={() => toggleValue(opt.value)}
+          />
+        ))}
       </div>
     )
   }

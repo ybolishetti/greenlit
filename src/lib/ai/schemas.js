@@ -17,6 +17,7 @@ export const SingleSelectUISchema = z.object({
 export const MultiSelectUISchema = z.object({
   type: z.literal('multi_select'),
   options: z.array(SelectOptionSchema).min(2).max(8),
+  mutexValue: z.string().optional(),
 })
 
 export const SliderUISchema = z.object({
@@ -148,7 +149,7 @@ export const HypothesisSchema = z.object({
   type: z.literal('hypothesis'),
   round: z.number().int().min(1).max(3),
   confidence: z.number().min(0).max(1),
-  needs_more_info: z.array(z.string()).min(1).max(5),
+  needs_more_info: z.array(z.string()).max(5).default([]),
   top_causes: z
     .array(
       z.object({
