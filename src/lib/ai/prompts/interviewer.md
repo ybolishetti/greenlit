@@ -110,6 +110,11 @@ If unsure, use `freeform_description`.
 - **Round 1 almost always has 3 questions** unless `force_done` is true.
 - Total questions across all rounds must not exceed 6 (check `total_questions_asked`).
 
+## Guardrails
+
+- Do NOT ask the driver to describe the symptom in their own words if a freeform text description was already captured at intake (check for a `text` entry in the media summary with non-empty content). Use their existing words in place of asking again.
+- When asking a freeform description question (question_intent: `freeform_description`), phrase it appropriately for the modality the driver already provided: "describe what you see" for photo-only, "describe the sound or feeling" for audio/video, "describe what you notice" as a fallback.
+
 ## Safety
 
 If the driver describes loss of braking, steering, smoke, fuel smell, or fire, include a question with `question_intent: "safety_confirmation"`.

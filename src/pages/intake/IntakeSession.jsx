@@ -179,8 +179,13 @@ export default function IntakeSession() {
           event: 'validation_failed',
           details: err.details,
         })
+        // Don't leak the raw validation error to end users. Present a plain retry-friendly message.
+        setError('We hit a hiccup processing that answer. Tap Skip to jump to your brief, or reload to retry.')
+      } else {
+        setError(err.message || 'Something went wrong')
       }
-      setError(err.message || 'Something went wrong')
+      // Clear the stale batch so the user isn't looped back to the same questions.
+      setActiveBatch(null)
     } finally {
       setProcessing(false)
     }

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Video, Square, Trash2 } from 'lucide-react'
+import { Video, Square, Trash2, Upload } from 'lucide-react'
+
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024
 
 export default function VideoRecorder({ onCapture }) {
   const [recording, setRecording] = useState(false)
@@ -13,6 +15,7 @@ export default function VideoRecorder({ onCapture }) {
   const chunksRef = useRef([])
   const timerRef = useRef(null)
   const videoRef = useRef(null)
+  const uploadInputRef = useRef(null)
 
   useEffect(() => {
     onCapture?.(blob)
@@ -68,19 +71,53 @@ export default function VideoRecorder({ onCapture }) {
     if (videoRef.current) videoRef.current.srcObject = null
   }
 
+  const handleUpload = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setError(null)
+    if (file.size > MAX_VIDEO_BYTES) {
+      setError('Video is over 50 MB. Try recording a shorter clip or trim it in your phone first.')
+      e.target.value = ''
+      return
+    }
+    setBlob(file)
+    setPreviewUrl(URL.createObjectURL(file))
+    e.target.value = ''
+  }
+
   const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
   return (
     <div className="rounded-2xl border border-line bg-panel p-6">
       {!previewUrl && !recording && (
         <div className="flex flex-col items-center gap-4 py-6 text-center">
-          <button
-            onClick={start}
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-brand text-ink hover:bg-brand-dim"
-          >
-            <Video size={26} />
-          </button>
-          <p className="font-medium">Tap to record video</p>
+          <div className="flex flex-wrap justify-center gap-3">
+            <button
+              onClick={start}
+              className="flex flex-col items-center gap-2 rounded-2xl border border-line bg-panel px-6 py-5 text-sm hover:border-brand/50"
+            >
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand text-ink">
+                <Video size={22} />
+              </div>
+              <span className="font-medium">Record video</span>
+            </button>
+            <button
+              onClick={() => uploadInputRef.current?.click()}
+              className="flex flex-col items-center gap-2 rounded-2xl border border-line bg-panel px-6 py-5 text-sm hover:border-brand/50"
+            >
+              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-line text-text-mute">
+                <Upload size={22} />
+              </div>
+              <span className="font-medium">Upload video</span>
+            </button>
+          </div>
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept="video/*"
+            className="hidden"
+            onChange={handleUpload}
+          />
           {error && <p className="text-xs text-danger">{error}</p>}
         </div>
       )}
