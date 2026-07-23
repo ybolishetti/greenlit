@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { jsPDF } from 'jspdf'
-import { Download, Loader2, ShieldAlert, ShieldCheck, ShieldQuestion } from 'lucide-react'
+import { Download, Loader2 } from 'lucide-react'
 import { getConsumerIntake } from '../lib/db'
 import { useAuth } from '../context/AuthContext'
-
-const URGENCY_STYLE = {
-  immediate: { icon: ShieldAlert, color: 'text-danger', bg: 'bg-danger/10', border: 'border-danger/30' },
-  monitor: { icon: ShieldQuestion, color: 'text-warn', bg: 'bg-warn/10', border: 'border-warn/30' },
-  routine: { icon: ShieldCheck, color: 'text-ok', bg: 'bg-ok/10', border: 'border-ok/30' },
-}
+import UrgencyBanner from '../components/brief/UrgencyBanner'
+import VehicleLine from '../components/brief/VehicleLine'
+import CustomerVerbatim from '../components/brief/CustomerVerbatim'
+import ProbableCauses from '../components/brief/ProbableCauses'
+import InspectionTargets from '../components/brief/InspectionTargets'
+import DisclaimerFooter from '../components/brief/DisclaimerFooter'
+import { buildBriefPdf } from '../lib/brief/pdf'
 
 export default function AccountBrief() {
   const { id } = useParams()
@@ -17,6 +17,7 @@ export default function AccountBrief() {
   const [intake, setIntake] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [pdfBusy, setPdfBusy] = useState(false)
 
   useEffect(() => {
     if (authLoading) return
@@ -64,37 +65,14 @@ export default function AccountBrief() {
   }
 
   const brief = intake.brief
-  const style = URGENCY_STYLE[brief.urgency] || URGENCY_STYLE.routine
-  const UrgencyIcon = style.icon
 
-  const downloadPdf = () => {
-    const doc = new jsPDF()
-    let y = 20
-    const line = (text, size = 11, gap = 7, color = [20, 20, 20]) => {
-      doc.setFontSize(size)
-      doc.setTextColor(...color)
-      const wrapped = doc.splitTextToSize(text, 170)
-      doc.text(wrapped, 20, y)
-      y += gap * wrapped.length
+  const downloadPdf = async () => {
+    setPdfBusy(true)
+    try {
+      await buildBriefPdf({ brief, intake, media: [], filename: `greenlit-brief-${id}.pdf` })
+    } finally {
+      setPdfBusy(false)
     }
-
-    line('GREENLIT — Mechanic Brief', 18, 10, [76, 175, 107])
-    if (intake.created_at) {
-      line(new Date(intake.created_at).toLocaleString(), 9, 8, [120, 120, 120])
-    }
-    y += 2
-    line(`Category: ${brief.category}`, 12, 8)
-    if (brief.urgencyLabel) line(`Urgency: ${brief.urgencyLabel}`, 12, 8)
-    y += 4
-    if (brief.probableCauses?.length) {
-      line('Ranked probable causes', 13, 8, [76, 175, 107])
-      brief.probableCauses.forEach((c) => line(`- ${c.cause}  (${c.confidence}% confidence)`, 11, 7))
-    }
-    if (brief.disclaimer) {
-      y += 4
-      line(brief.disclaimer, 9, 6, [120, 120, 120])
-    }
-    doc.save(`greenlit-brief-${id}.pdf`)
   }
 
   return (
@@ -105,13 +83,6 @@ export default function AccountBrief() {
 
       <p className="mt-6 text-sm font-medium uppercase tracking-wide text-brand">Saved brief</p>
 
-      {intake.vehicle && (
-        <p className="mt-2 text-xs text-text-mute">
-          {intake.vehicle.year} {intake.vehicle.make} {intake.vehicle.model}
-          {intake.vehicle.mileage != null ? ` · ${intake.vehicle.mileage.toLocaleString()} mi` : ''}
-        </p>
-      )}
-
       {brief.category && (
         <>
           <h1 className="mt-2 text-3xl font-semibold text-text">{brief.category}</h1>
@@ -121,52 +92,24 @@ export default function AccountBrief() {
         </>
       )}
 
-      {brief.urgency && brief.urgencyLabel && brief.estimateRange && (
-        <div className={`mt-6 flex items-center gap-3 rounded-xl border ${style.border} ${style.bg} px-4 py-3`}>
-          <UrgencyIcon size={20} className={style.color} />
-          <div>
-            <p className={`font-medium ${style.color}`}>{brief.urgencyLabel}</p>
-            <p className="text-xs text-text-dim">
-              Estimated repair range: ${brief.estimateRange[0]}–${brief.estimateRange[1]}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {brief.probableCauses?.length > 0 && (
-        <Section title="Ranked probable causes">
-          <div className="space-y-3">
-            {brief.probableCauses.map((c) => (
-              <div key={c.cause} className="rounded-xl border border-line bg-panel p-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-text">{c.cause}</span>
-                  <span className="text-text-dim">{c.confidence}%</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
+      <UrgencyBanner urgency={brief.urgency} urgencyLabel={brief.urgencyLabel} estimateRange={brief.estimateRange} />
+      <VehicleLine vehicle={intake.vehicle} />
+      <CustomerVerbatim symptomLanguage={brief.symptomLanguage} />
+      <ProbableCauses probableCauses={brief.probableCauses} />
+      <InspectionTargets componentsToInspect={brief.componentsToInspect} />
+      <DisclaimerFooter disclaimer={brief.disclaimer} />
 
       <div className="mt-10">
         <button
           type="button"
           onClick={downloadPdf}
-          className="inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-ink hover:bg-brand-dim"
+          disabled={pdfBusy}
+          className="inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-ink hover:bg-brand-dim disabled:opacity-60"
         >
-          <Download size={16} />
-          Download brief as PDF
+          {pdfBusy ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+          {pdfBusy ? 'Preparing PDF…' : 'Download brief as PDF'}
         </button>
       </div>
-    </div>
-  )
-}
-
-function Section({ title, children }) {
-  return (
-    <div className="mt-8">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-mute">{title}</h2>
-      {children}
     </div>
   )
 }

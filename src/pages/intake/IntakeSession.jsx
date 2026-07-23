@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import QuestionBatch from '../../components/intake/QuestionBatch'
 import ConversationProgress from '../../components/intake/ConversationProgress'
+import AnalyzingState from '../../components/intake/AnalyzingState'
 import ErrorBanner from '../../components/ErrorBanner'
 import {
   appendMessage,
@@ -50,6 +51,7 @@ export default function IntakeSession() {
   const { id } = useParams()
   const navigate = useNavigate()
   const startedRef = useRef(false)
+  const analyzingStartRef = useRef(0)
 
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
@@ -57,8 +59,18 @@ export default function IntakeSession() {
   const [messages, setMessages] = useState([])
   const [intake, setIntake] = useState(null)
   const [activeBatch, setActiveBatch] = useState(null)
+  const [answeredCount, setAnsweredCount] = useState(0)
   const [customerName, setCustomerName] = useState('')
   const [showNameStep, setShowNameStep] = useState(false)
+
+  const MIN_ANALYZING_MS = 400
+
+  const waitOutMinAnalyzing = async () => {
+    const elapsed = Date.now() - analyzingStartRef.current
+    if (elapsed < MIN_ANALYZING_MS) {
+      await new Promise((r) => setTimeout(r, MIN_ANALYZING_MS - elapsed))
+    }
+  }
 
   const applyBundle = (data) => {
     setIntake(data.intake)
@@ -128,6 +140,16 @@ export default function IntakeSession() {
   }
 
   const handleBatchSubmit = async (answers) => {
+    // Clear the batch synchronously, before any await, so QuestionBatch
+    // unmounts on this render tick — it can never flash the just-answered
+    // questions during the diagnostician/interviewer round trip below.
+    setActiveBatch(null)
+    // `messages` already contains the interviewer question_batch message for
+    // the batch just answered (it was fetched before QuestionBatch rendered),
+    // so countQuestionsAsked already reflects everything answered so far —
+    // don't add answers.length on top, that would double-count this batch.
+    setAnsweredCount(countQuestionsAsked(messages))
+    analyzingStartRef.current = Date.now()
     setProcessing(true)
     setError(null)
     try {
@@ -160,6 +182,7 @@ export default function IntakeSession() {
           event: 'forced_done',
           details: { confidence: getLastHypothesis(bundle.messages)?.confidence },
         })
+        await waitOutMinAnalyzing()
         goToNameStep()
         await fetchAndApply()
         return
@@ -167,6 +190,7 @@ export default function IntakeSession() {
 
       bundle = await fetchAndApply()
       const response = await requestInterviewer(bundle)
+      await waitOutMinAnalyzing()
 
       if (response.type === 'done') goToNameStep()
       else setActiveBatch(response)
@@ -295,9 +319,7 @@ export default function IntakeSession() {
       )}
 
       {!showNameStep && !activeBatch && processing && (
-        <div className="flex items-center gap-2 text-text-dim">
-          <Loader2 size={16} className="animate-spin" /> Thinking…
-        </div>
+        <AnalyzingState vehicle={intake?.vehicle} answeredCount={answeredCount} />
       )}
 
       {intake && (

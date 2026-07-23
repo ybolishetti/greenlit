@@ -1,24 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
-import { jsPDF } from 'jspdf'
-import {
-  Download,
-  Flag,
-  ShieldAlert,
-  ShieldCheck,
-  ShieldQuestion,
-  Trash2,
-  X,
-} from 'lucide-react'
+import { Download, Flag, Trash2, X } from 'lucide-react'
 import { archiveIntake, flagIntake, getIntake, saveRating, unflagIntake } from '../../lib/db'
 import RatingForm from '../../components/shop/RatingForm'
 import { relativeTime, vehicleLabel } from '../../lib/shop/intakeDisplay'
-
-const URGENCY_STYLE = {
-  immediate: { icon: ShieldAlert, color: 'text-danger', bg: 'bg-danger/10', border: 'border-danger/30' },
-  monitor: { icon: ShieldQuestion, color: 'text-warn', bg: 'bg-warn/10', border: 'border-warn/30' },
-  routine: { icon: ShieldCheck, color: 'text-ok', bg: 'bg-ok/10', border: 'border-ok/30' },
-}
+import UrgencyBanner from '../../components/brief/UrgencyBanner'
+import CustomerVerbatim from '../../components/brief/CustomerVerbatim'
+import ProbableCauses from '../../components/brief/ProbableCauses'
+import InspectionTargets from '../../components/brief/InspectionTargets'
+import RawEvidence from '../../components/brief/RawEvidence'
+import { buildBriefPdf } from '../../lib/brief/pdf'
 
 const FLAG_REASONS = ['Inappropriate', 'Test/spam', 'Duplicate', 'Other']
 
@@ -34,7 +25,7 @@ export default function IntakeDetail() {
   const [flagModalOpen, setFlagModalOpen] = useState(false)
   const [trashConfirmOpen, setTrashConfirmOpen] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [rawOpen, setRawOpen] = useState(false)
+  const [pdfBusy, setPdfBusy] = useState(false)
 
   useEffect(() => {
     setBundle(null)
@@ -50,8 +41,7 @@ export default function IntakeDetail() {
 
   const brief = intake.brief
   const urgency = brief?.urgency || intake.urgency || 'routine'
-  const style = URGENCY_STYLE[urgency] || URGENCY_STYLE.routine
-  const UrgencyIcon = style.icon
+  const guidedAnswers = (bundle?.messages ?? []).filter((m) => m.role === 'user' || m.role === 'interviewer')
 
   const handleFlag = async (reason) => {
     setBusy(true)
@@ -91,38 +81,14 @@ export default function IntakeDetail() {
     await refresh()
   }
 
-  const downloadPdf = () => {
-    const doc = new jsPDF()
-    let y = 20
-    const line = (text, size = 11, gap = 7, color = [20, 20, 20]) => {
-      doc.setFontSize(size)
-      doc.setTextColor(...color)
-      const wrapped = doc.splitTextToSize(text, 170)
-      doc.text(wrapped, 20, y)
-      y += gap * wrapped.length
+  const downloadPdf = async () => {
+    if (!brief) return
+    setPdfBusy(true)
+    try {
+      await buildBriefPdf({ brief, intake, media: bundle?.media ?? [], filename: `greenlit-brief-${id}.pdf` })
+    } finally {
+      setPdfBusy(false)
     }
-
-    line('GREENLIT — Mechanic Brief', 18, 10, [76, 175, 107])
-    line(new Date(intake.created_at).toLocaleString(), 9, 8, [120, 120, 120])
-    y += 2
-    if (brief?.category) line(`Category: ${brief.category}`, 12, 8)
-    if (brief?.urgencyLabel) line(`Urgency: ${brief.urgencyLabel}`, 12, 8)
-    y += 4
-    if (brief?.probableCauses?.length) {
-      line('Ranked probable causes', 13, 8, [76, 175, 107])
-      brief.probableCauses.forEach((c) => line(`- ${c.cause}  (${c.confidence}% confidence)`, 11, 7))
-      y += 2
-    }
-    if (brief?.componentsToInspect?.length) {
-      line('Components to inspect first', 13, 8, [76, 175, 107])
-      brief.componentsToInspect.forEach((c) => line(`- ${c}`, 11, 7))
-      y += 2
-    }
-    if (brief?.estimateRange) {
-      line(`Estimated repair range: $${brief.estimateRange[0]} - $${brief.estimateRange[1]}`, 11, 7)
-    }
-
-    doc.save(`greenlit-brief-${id}.pdf`)
   }
 
   return (
@@ -142,9 +108,10 @@ export default function IntakeDetail() {
         <div className="flex items-center gap-2">
           <button
             onClick={downloadPdf}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-text hover:border-brand/50"
+            disabled={pdfBusy}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-text hover:border-brand/50 disabled:opacity-60"
           >
-            <Download size={13} /> Print / share
+            <Download size={13} /> {pdfBusy ? 'Preparing…' : 'Print / share'}
           </button>
           {intake.flagged ? (
             <button
@@ -171,74 +138,26 @@ export default function IntakeDetail() {
         </div>
       </div>
 
-      {brief?.urgencyLabel && (
-        <div className={`mt-6 flex items-center gap-3 rounded-xl border ${style.border} ${style.bg} px-4 py-3`}>
-          <UrgencyIcon size={20} className={style.color} />
-          <div>
-            <p className={`font-medium ${style.color}`}>Urgency: {brief.urgencyLabel}</p>
-            {brief.estimateRange && (
-              <p className="text-xs text-text-dim">
-                Estimated repair range: ${brief.estimateRange[0]}–${brief.estimateRange[1]}
+      <UrgencyBanner urgency={urgency} urgencyLabel={brief?.urgencyLabel} estimateRange={brief?.estimateRange} />
+      <CustomerVerbatim symptomLanguage={brief?.symptomLanguage} />
+      <ProbableCauses probableCauses={brief?.probableCauses} />
+      <InspectionTargets componentsToInspect={brief?.componentsToInspect} />
+      {bundleError ? (
+        <p className="mt-8 text-sm text-text-dim">Raw evidence unavailable for this intake.</p>
+      ) : (
+        <RawEvidence media={bundle?.media} />
+      )}
+
+      {guidedAnswers.length > 0 && (
+        <Section title="Guided answers">
+          <div className="space-y-2 rounded-xl border border-line bg-panel p-4 text-sm">
+            {guidedAnswers.map((m) => (
+              <p key={m.id} className="text-text-dim">
+                <span className="font-medium capitalize text-text/70">{m.role}: </span>
+                {typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}
               </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {brief?.symptomLanguage?.length > 0 && (
-        <Section title="Customer's exact words">
-          <div className="space-y-1.5 rounded-xl border border-line bg-ink/40 p-4 font-mono text-sm text-text/80">
-            {brief.symptomLanguage.map((s) => (
-              <p key={s}>“{s}”</p>
             ))}
           </div>
-        </Section>
-      )}
-
-      <Section title="Raw inputs">
-        <button
-          onClick={() => setRawOpen((v) => !v)}
-          className="text-sm text-brand hover:underline"
-        >
-          {rawOpen ? 'Hide' : 'Show'} audio, photos, video, and guided answers
-        </button>
-        {rawOpen && (
-          <div className="mt-3">
-            {bundleError && (
-              <p className="text-sm text-text-dim">Raw inputs unavailable for this intake.</p>
-            )}
-            {bundle && <RawInputs bundle={bundle} />}
-          </div>
-        )}
-      </Section>
-
-      {brief?.probableCauses?.length > 0 && (
-        <Section title="Ranked probable causes">
-          <div className="space-y-3">
-            {brief.probableCauses.map((c) => (
-              <div key={c.cause} className="rounded-xl border border-line bg-panel p-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-text">{c.cause}</span>
-                  <span className="text-text-dim">{c.confidence}%</span>
-                </div>
-                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line">
-                  <div className="h-full rounded-full bg-brand" style={{ width: `${c.confidence}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {brief?.componentsToInspect?.length > 0 && (
-        <Section title="Components to inspect first">
-          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {brief.componentsToInspect.map((c) => (
-              <li key={c} className="rounded-lg border border-line bg-panel px-3 py-2 text-sm text-text/80">
-                {c}
-              </li>
-            ))}
-          </ul>
         </Section>
       )}
 
@@ -283,54 +202,6 @@ function Section({ title, children }) {
       {children}
     </div>
   )
-}
-
-function RawInputs({ bundle }) {
-  const media = bundle.media ?? []
-  const messages = bundle.messages ?? []
-  const qa = messages.filter((m) => m.role === 'user' || m.role === 'interviewer')
-
-  return (
-    <div className="space-y-4">
-      {media.length > 0 && (
-        <div className="space-y-3">
-          {media.map((m) => (
-            <MediaItem key={m.id} media={m} />
-          ))}
-        </div>
-      )}
-      {qa.length > 0 && (
-        <div className="space-y-2 rounded-xl border border-line bg-panel p-4 text-sm">
-          {qa.map((m) => (
-            <p key={m.id} className="text-text-dim">
-              <span className="font-medium capitalize text-text/70">{m.role}: </span>
-              {typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}
-            </p>
-          ))}
-        </div>
-      )}
-      {media.length === 0 && qa.length === 0 && (
-        <p className="text-sm text-text-dim">No raw inputs recorded.</p>
-      )}
-    </div>
-  )
-}
-
-function MediaItem({ media }) {
-  if (media.kind === 'text') {
-    return (
-      <p className="rounded-lg border border-line bg-panel p-3 text-sm text-text/80">
-        {media.text_content}
-      </p>
-    )
-  }
-  if (!media.signed_url) {
-    return <p className="text-xs text-text-mute">{media.kind} attachment unavailable</p>
-  }
-  if (media.kind === 'audio') return <audio controls src={media.signed_url} className="w-full" />
-  if (media.kind === 'video') return <video controls src={media.signed_url} className="w-full rounded-lg" />
-  if (media.kind === 'photo') return <img src={media.signed_url} alt="" className="max-w-xs rounded-lg" />
-  return null
 }
 
 function FlagModal({ onClose, onSubmit, busy }) {

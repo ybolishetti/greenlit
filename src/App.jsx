@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import Navbar from './components/Navbar'
+import ConsumerRouteGuard from './components/ConsumerRouteGuard'
 import Landing from './pages/Landing'
 import IntakeNew from './pages/intake/IntakeNew'
 import IntakeSession from './pages/intake/IntakeSession'
@@ -30,11 +31,11 @@ function App() {
         <main>
           <Routes>
             <Route path="/" element={<Landing />} />
-            <Route path="/intake" element={<IntakeNew />} />
-            <Route path="/intake/:id" element={<IntakeSession />} />
+            <Route path="/intake" element={<ConsumerRouteGuard><IntakeNew /></ConsumerRouteGuard>} />
+            <Route path="/intake/:id" element={<ConsumerRouteGuard><IntakeSession /></ConsumerRouteGuard>} />
             <Route path="/brief/:id" element={<BriefResult />} />
-            <Route path="/account" element={<Account />} />
-            <Route path="/account/:id" element={<AccountBrief />} />
+            <Route path="/account" element={<ConsumerRouteGuard><Account /></ConsumerRouteGuard>} />
+            <Route path="/account/:id" element={<ConsumerRouteGuard><AccountBrief /></ConsumerRouteGuard>} />
             <Route path="/i/:slug" element={<ShopQrRedirect />} />
             <Route path="/shop/:slug" element={<ShopLayout />}>
               <Route index element={<OverviewTab />} />
