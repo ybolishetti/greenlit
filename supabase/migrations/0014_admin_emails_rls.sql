@@ -5,6 +5,8 @@
 
 ALTER TABLE public.admin_emails ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS admin_emails_admin_all ON public.admin_emails;
+
 CREATE POLICY admin_emails_admin_all
   ON public.admin_emails FOR ALL
   TO authenticated
