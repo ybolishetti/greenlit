@@ -20,7 +20,9 @@ const STEPS = [
 export default function Landing() {
   const startIntake = useStartIntake()
   const openLogin = useOpenLogin()
-  const { isSignedIn } = useAuth()
+  const { isSignedIn, shopMemberships } = useAuth()
+  const isShopStaff = shopMemberships.length > 0
+  const dashboardPath = isShopStaff ? `/shop/${shopMemberships[0].shops.slug}` : null
 
   return (
     <div>
@@ -37,14 +39,24 @@ export default function Landing() {
           technical language required.
         </p>
         <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
-          <button
-            type="button"
-            onClick={startIntake}
-            className="inline-flex items-center gap-2 rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-ink hover:bg-brand-dim transition-colors"
-          >
-            Start intake
-            <ArrowRight size={16} />
-          </button>
+          {isShopStaff ? (
+            <Link
+              to={dashboardPath}
+              className="inline-flex items-center gap-2 rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-ink hover:bg-brand-dim transition-colors"
+            >
+              Go to dashboard
+              <ArrowRight size={16} />
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={startIntake}
+              className="inline-flex items-center gap-2 rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-ink hover:bg-brand-dim transition-colors"
+            >
+              Start intake
+              <ArrowRight size={16} />
+            </button>
+          )}
           {!isSignedIn && (
             <button
               type="button"

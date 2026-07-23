@@ -88,6 +88,9 @@ export default function PhotoUpload({ onChange, onCapture, single = false }) {
         Fluid leaks, dashboard lights, tire wear, visible damage — whatever's relevant.
         {!single && ` Max ${MAX_PHOTOS} photos.`}
       </p>
+      <p className="mt-1 text-xs text-text-mute">
+        Uploads are private to you and the shop you send this brief to.
+      </p>
     </div>
   )
 }

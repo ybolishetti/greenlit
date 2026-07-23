@@ -149,6 +149,9 @@ export default function VideoRecorder({ onCapture }) {
           </div>
         </div>
       )}
+      <p className="mt-3 text-xs text-text-mute">
+        Uploads are private to you and the shop you send this brief to.
+      </p>
     </div>
   )
 }

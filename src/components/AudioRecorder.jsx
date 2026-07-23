@@ -146,6 +146,9 @@ export default function AudioRecorder({ onCapture, onChange }) {
           </button>
         </div>
       )}
+      <p className="mt-3 text-xs text-text-mute">
+        Uploads are private to you and the shop you send this brief to.
+      </p>
     </div>
   )
 }

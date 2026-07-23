@@ -155,7 +155,12 @@ export default function IntakeNew() {
             )}
 
             {(savedVehicles.length === 0 || showVehicleForm) && (
-              <VehicleForm submitting={submitting} showSaveToAccount={!!user} onSubmit={handleVehicleSubmit} />
+              <VehicleForm
+                submitting={submitting}
+                showSaveToAccount={!!user}
+                initialValues={vehicle}
+                onSubmit={handleVehicleSubmit}
+              />
             )}
           </div>
         </>

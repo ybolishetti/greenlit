@@ -13,7 +13,7 @@ const corsHeaders = {
 
 const RATE_LIMIT = 20
 const RATE_WINDOW_MINUTES = 5
-const SIGNED_URL_TTL_SECONDS = 300
+const SIGNED_URL_TTL_SECONDS = 3600
 
 type Intent =
   | 'interviewer'
