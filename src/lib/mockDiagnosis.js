@@ -311,11 +311,11 @@ export const DURATION_OPTIONS = [
 ]
 
 export const WARNING_LIGHT_OPTIONS = [
-  { value: 'none', label: 'No warning lights' },
   { value: 'check-engine', label: 'Check engine light' },
   { value: 'battery', label: 'Battery light' },
   { value: 'oil', label: 'Check oil light' },
   { value: 'abs', label: 'ABS / brake light' },
   { value: 'tire-pressure', label: 'Tire pressure light (TPMS)' },
+  { value: 'none', label: 'No warning lights' },
   { value: 'other', label: 'Some other light' },
 ]

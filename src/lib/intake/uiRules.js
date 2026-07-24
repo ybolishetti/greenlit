@@ -60,12 +60,12 @@ const VIBRATION_LOCATION_OPTIONS = [
 ]
 
 const WARNING_LIGHT_OPTIONS = [
-  { value: 'none', label: 'No warning lights' },
   { value: 'check-engine', label: 'Check engine' },
   { value: 'abs', label: 'ABS / brake' },
   { value: 'oil', label: 'Check oil' },
   { value: 'battery', label: 'Battery' },
   { value: 'tire-pressure', label: 'Tire pressure (TPMS)' },
+  { value: 'none', label: 'No warning lights' },
   { value: 'other', label: 'Other warning light' },
 ]
 
