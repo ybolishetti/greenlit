@@ -53,7 +53,8 @@ function App() {
             <Route path="/dev/annotate" element={<AnnotationTool />} />
           </Routes>
         </main>
-        <footer className="border-t border-line/60 py-8 text-center text-xs text-text-mute">
+        <footer className="flex items-center justify-center gap-2 border-t border-line/60 py-8 text-center text-xs text-text-mute">
+          <img src="/logo.png" alt="" className="h-4 w-4" />
           Greenlit — speak mechanic.
         </footer>
       </div>
