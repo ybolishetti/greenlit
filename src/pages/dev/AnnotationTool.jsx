@@ -5,6 +5,7 @@ import AuthGate from '../../components/AuthGate'
 import { getIntake } from '../../lib/db'
 import {
   getAnnotations,
+  getLlmTraces,
   isAnnotator,
   listRatedIntakes,
   saveAnnotation,
@@ -15,6 +16,7 @@ export default function AnnotationTool() {
   const [intakes, setIntakes] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [bundle, setBundle] = useState(null)
+  const [traces, setTraces] = useState([])
   const [annotations, setAnnotations] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -38,8 +40,13 @@ export default function AnnotationTool() {
     setSelectedId(intakeId)
     setError(null)
     try {
-      const [data, existing] = await Promise.all([getIntake(intakeId), getAnnotations(intakeId)])
+      const [data, existing, traceRows] = await Promise.all([
+        getIntake(intakeId),
+        getAnnotations(intakeId),
+        getLlmTraces(intakeId),
+      ])
       setBundle(data)
+      setTraces(traceRows)
       const byMessage = Object.fromEntries(
         existing.map((a) => [a.message_id, a.annotation])
       )
@@ -131,6 +138,7 @@ export default function AnnotationTool() {
                             : row.id.slice(0, 8)}
                           {' · '}
                           {row.rating?.on_target}
+                          {row.rating?.accuracy_score != null && ` · ${row.rating.accuracy_score}/100`}
                         </span>
                       </button>
                     </li>
@@ -152,8 +160,25 @@ export default function AnnotationTool() {
                     </p>
                     <p className="mt-1 text-text-dim">
                       Outcome: {bundle.rating?.on_target} — {bundle.rating?.repair_performed || 'No repair notes'}
+                      {bundle.rating?.accuracy_score != null && ` · Accuracy ${bundle.rating.accuracy_score}/100`}
                     </p>
+                    {bundle.rating?.comment && (
+                      <p className="mt-1 text-text-dim">&ldquo;{bundle.rating.comment}&rdquo;</p>
+                    )}
                   </div>
+
+                  <details className="mt-4 rounded-xl border border-line bg-panel p-4">
+                    <summary className="cursor-pointer text-sm font-medium text-text">
+                      LLM traces ({traces.length})
+                    </summary>
+                    <div className="mt-3 space-y-2">
+                      {traces.length === 0 ? (
+                        <p className="text-xs text-text-dim">No traces recorded for this intake.</p>
+                      ) : (
+                        traces.map((t) => <TraceRow key={t.id} trace={t} />)
+                      )}
+                    </div>
+                  </details>
 
                   <div className="mt-6 space-y-4">
                     {bundle.messages.map((msg) => (
@@ -202,5 +227,37 @@ export default function AnnotationTool() {
         </div>
       )}
     </AuthGate>
+  )
+}
+
+function TraceRow({ trace }) {
+  const [showRaw, setShowRaw] = useState(false)
+
+  return (
+    <div className="rounded-lg border border-line bg-ink/30 p-3 text-xs">
+      <div className="flex items-center justify-between text-text-dim">
+        <span>
+          {trace.role} · round {trace.round_number ?? '—'} · {trace.model_id}
+        </span>
+        <span>{trace.latency_ms != null ? `${trace.latency_ms}ms` : '—'}</span>
+      </div>
+      <button type="button" onClick={() => setShowRaw((v) => !v)} className="mt-1 text-brand">
+        {showRaw ? 'Hide raw' : 'View raw'}
+      </button>
+      {showRaw && (
+        <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-text/70">
+          {JSON.stringify(
+            {
+              prompt_input: trace.prompt_input,
+              response_raw: trace.response_raw,
+              response_parsed: trace.response_parsed,
+              parse_error: trace.parse_error,
+            },
+            null,
+            2
+          )}
+        </pre>
+      )}
+    </div>
   )
 }

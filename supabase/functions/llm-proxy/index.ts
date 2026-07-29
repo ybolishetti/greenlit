@@ -6,6 +6,13 @@ import {
   schemaHintForIntent,
 } from './schemas.ts'
 
+// Global provided by the Supabase/Deno-Deploy edge runtime for background
+// work that must survive after the Response is returned. The isolate can be
+// torn down as soon as the response is sent, which can silently drop a bare
+// non-awaited promise — waitUntil is the supported fire-and-forget mechanism
+// for this runtime specifically. Do not replace with `void somePromise`.
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void }
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -163,12 +170,11 @@ Deno.serve(async (req) => {
       )
     }
 
-    let raw = await callOpenAi(apiUrl, apiKey, model, systemPrompt, llmPayload)
-    let parsed: unknown
-    let result = schema.safeParse(raw)
+    let call = await callOpenAi(apiUrl, apiKey, model, systemPrompt, llmPayload)
+    let result = schema.safeParse(call.parsed)
 
     if (!result.success) {
-      raw = await callOpenAi(
+      call = await callOpenAi(
         apiUrl,
         apiKey,
         model,
@@ -176,17 +182,41 @@ Deno.serve(async (req) => {
         llmPayload,
         `Your response failed validation: ${formatZodError(result.error)}. Reply with valid JSON matching this schema: ${hint}`
       )
-      result = schema.safeParse(raw)
+      result = schema.safeParse(call.parsed)
     }
+
+    const promptVersion =
+      intent === 'interviewer'
+        ? Deno.env.get('INTERVIEWER_PROMPT_SHA') ?? 'unknown'
+        : Deno.env.get('DIAGNOSTICIAN_PROMPT_SHA') ?? 'unknown'
+    const traceRole = intent === 'interviewer' ? 'interviewer' : 'diagnostician'
+
+    const insertTrace = admin.from('llm_traces').insert({
+      intake_id: intakeId,
+      role: traceRole,
+      round_number: llmPayload.round ?? null,
+      model_id: model,
+      prompt_version: promptVersion,
+      prompt_input: { messages: call.requestMessages },
+      response_raw: call.rawResponseBody,
+      response_parsed: result.success ? result.data : null,
+      parse_error: result.success ? null : formatZodError(result.error),
+      latency_ms: call.latencyMs,
+      input_tokens: call.inputTokens,
+      output_tokens: call.outputTokens,
+    })
+    EdgeRuntime.waitUntil(
+      insertTrace.then(() => {}).catch((err) => console.error('[llm_traces] insert failed', err))
+    )
 
     if (!result.success) {
       return jsonError(422, 'validation_failed', formatZodError(result.error), {
-        raw_output: raw,
+        raw_output: call.parsed,
         schema_hint: hint,
       })
     }
 
-    parsed = result.data
+    const parsed = result.data
 
     await admin.from('llm_call_log').insert({ intake_id: intakeId })
 
@@ -221,6 +251,15 @@ async function loadPrompt(intent: string): Promise<string> {
   return await Deno.readTextFile(new URL('./prompts/diagnostician.md', import.meta.url))
 }
 
+type LlmCallResult = {
+  parsed: unknown
+  rawResponseBody: unknown
+  latencyMs: number
+  inputTokens: number | null
+  outputTokens: number | null
+  requestMessages: Array<{ role: string; content: string }>
+}
+
 async function callOpenAi(
   apiUrl: string,
   apiKey: string,
@@ -228,11 +267,17 @@ async function callOpenAi(
   systemPrompt: string,
   userPayload: unknown,
   retryNote?: string
-): Promise<unknown> {
+): Promise<LlmCallResult> {
   const userContent = retryNote
     ? JSON.stringify({ ...(userPayload as object), validation_error: retryNote })
     : JSON.stringify(userPayload)
 
+  const requestMessages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userContent },
+  ]
+
+  const startedAt = Date.now()
   const res = await fetch(apiUrl, {
     method: 'POST',
     headers: {
@@ -242,10 +287,7 @@ async function callOpenAi(
     body: JSON.stringify({
       model,
       response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userContent },
-      ],
+      messages: requestMessages,
       temperature: 0.4,
     }),
   })
@@ -256,9 +298,18 @@ async function callOpenAi(
   }
 
   const data = await res.json()
+  const latencyMs = Date.now() - startedAt
   const content = data.choices?.[0]?.message?.content
   if (!content) throw new Error('Empty LLM response')
-  return JSON.parse(content)
+
+  return {
+    parsed: JSON.parse(content),
+    rawResponseBody: data,
+    latencyMs,
+    inputTokens: data.usage?.prompt_tokens ?? null,
+    outputTokens: data.usage?.completion_tokens ?? null,
+    requestMessages,
+  }
 }
 
 function extractPartialBrief(text: string): Record<string, unknown> {
@@ -330,11 +381,48 @@ function streamDiagnosticianFinal(
 ): Response {
   const encoder = new TextEncoder()
   let lastPartialKey = ''
+  const streamStartedAt = Date.now()
 
   const stream = new ReadableStream({
     async start(controller) {
       const enqueue = (obj: unknown) => {
         controller.enqueue(encoder.encode(`${JSON.stringify(obj)}\n`))
+      }
+
+      const initialRequestMessages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: JSON.stringify(userPayload) },
+      ]
+
+      // Fires exactly once per stream, right before the terminal outcome
+      // (success or validation failure) — never awaited, per the
+      // EdgeRuntime.waitUntil note above callOpenAi's declaration.
+      const insertTrace = (fields: {
+        requestMessages: Array<{ role: string; content: string }>
+        rawResponseBody: unknown
+        responseParsed: unknown
+        parseError: string | null
+        inputTokens: number | null
+        outputTokens: number | null
+      }) => {
+        const promptVersion = Deno.env.get('DIAGNOSTICIAN_PROMPT_SHA') ?? 'unknown'
+        const insertPromise = admin.from('llm_traces').insert({
+          intake_id: intakeId,
+          role: 'diagnostician',
+          round_number: (userPayload as { round?: number })?.round ?? null,
+          model_id: model,
+          prompt_version: promptVersion,
+          prompt_input: { messages: fields.requestMessages },
+          response_raw: fields.rawResponseBody,
+          response_parsed: fields.responseParsed,
+          parse_error: fields.parseError,
+          latency_ms: Date.now() - streamStartedAt,
+          input_tokens: fields.inputTokens,
+          output_tokens: fields.outputTokens,
+        })
+        EdgeRuntime.waitUntil(
+          insertPromise.then(() => {}).catch((err) => console.error('[llm_traces] insert failed', err))
+        )
       }
 
       try {
@@ -348,16 +436,21 @@ function streamDiagnosticianFinal(
             model,
             stream: true,
             response_format: { type: 'json_object' },
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: JSON.stringify(userPayload) },
-            ],
+            messages: initialRequestMessages,
             temperature: 0.4,
           }),
         })
 
         if (!res.ok) {
           const text = await res.text()
+          insertTrace({
+            requestMessages: initialRequestMessages,
+            rawResponseBody: { error: text },
+            responseParsed: null,
+            parseError: `LLM error ${res.status}: ${text}`,
+            inputTokens: null,
+            outputTokens: null,
+          })
           enqueue({ type: 'error', code: 'llm_error', message: text })
           controller.close()
           return
@@ -402,14 +495,27 @@ function streamDiagnosticianFinal(
         try {
           parsed = JSON.parse(content)
         } catch {
+          insertTrace({
+            requestMessages: initialRequestMessages,
+            rawResponseBody: { content },
+            responseParsed: null,
+            parseError: 'Invalid JSON from model',
+            inputTokens: null,
+            outputTokens: null,
+          })
           enqueue({ type: 'error', code: 'validation_failed', message: 'Invalid JSON from model' })
           controller.close()
           return
         }
 
         let result = FinalBriefSchema.safeParse(parsed)
+        let finalRequestMessages = initialRequestMessages
+        let finalRawResponseBody: unknown = { content }
+        let finalInputTokens: number | null = null
+        let finalOutputTokens: number | null = null
+
         if (!result.success) {
-          parsed = await callOpenAi(
+          const retryCall = await callOpenAi(
             apiUrl,
             apiKey,
             model,
@@ -417,8 +523,22 @@ function streamDiagnosticianFinal(
             userPayload,
             `Your response failed validation: ${formatZodError(result.error)}. Reply with valid JSON matching this schema: ${hint}`
           )
+          parsed = retryCall.parsed
           result = FinalBriefSchema.safeParse(parsed)
+          finalRequestMessages = retryCall.requestMessages
+          finalRawResponseBody = retryCall.rawResponseBody
+          finalInputTokens = retryCall.inputTokens
+          finalOutputTokens = retryCall.outputTokens
         }
+
+        insertTrace({
+          requestMessages: finalRequestMessages,
+          rawResponseBody: finalRawResponseBody,
+          responseParsed: result.success ? result.data : null,
+          parseError: result.success ? null : formatZodError(result.error),
+          inputTokens: finalInputTokens,
+          outputTokens: finalOutputTokens,
+        })
 
         if (!result.success) {
           enqueue({

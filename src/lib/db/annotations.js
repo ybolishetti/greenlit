@@ -22,7 +22,7 @@ export async function listRatedIntakes() {
   const sb = requireSupabase()
   const { data: ratings, error: ratingError } = await sb
     .from('intake_ratings')
-    .select('intake_id, on_target, repair_performed, created_at')
+    .select('intake_id, on_target, repair_performed, accuracy_score, comment, created_at')
     .order('created_at', { ascending: false })
 
   if (ratingError) throw ratingError
@@ -43,6 +43,20 @@ export async function listRatedIntakes() {
       rating: r,
     }))
     .filter((row) => row.id)
+}
+
+export async function getLlmTraces(intakeId) {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('llm_traces')
+    .select(
+      'id, role, round_number, model_id, prompt_version, prompt_input, response_raw, response_parsed, parse_error, latency_ms, input_tokens, output_tokens, created_at'
+    )
+    .eq('intake_id', intakeId)
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return data ?? []
 }
 
 export async function getAnnotations(intakeId) {

@@ -1,6 +1,6 @@
 import { requireSupabase } from '../supabase.js'
 
-export async function saveRating(intakeId, { onTarget, repairPerformed }) {
+export async function saveRating(intakeId, { onTarget, repairPerformed, accuracyScore, comment }) {
   const sb = requireSupabase()
   const {
     data: { user },
@@ -17,6 +17,8 @@ export async function saveRating(intakeId, { onTarget, repairPerformed }) {
         rated_by: user.id,
         on_target: onTarget,
         repair_performed: repairPerformed || null,
+        accuracy_score: accuracyScore ?? null,
+        comment: comment?.trim() || null,
       },
       { onConflict: 'intake_id' }
     )
