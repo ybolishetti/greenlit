@@ -24,6 +24,7 @@ export default function IntakeDetail() {
   const [bundleError, setBundleError] = useState(null)
   const [flagModalOpen, setFlagModalOpen] = useState(false)
   const [trashConfirmOpen, setTrashConfirmOpen] = useState(false)
+  const [rateBeforeTrashOpen, setRateBeforeTrashOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [pdfBusy, setPdfBusy] = useState(false)
 
@@ -76,9 +77,34 @@ export default function IntakeDetail() {
     }
   }
 
-  const handleRate = async (onTarget, repairPerformed) => {
-    await saveRating(id, { onTarget, repairPerformed })
+  const handleRate = async ({ onTarget, repairPerformed, accuracyScore, comment }) => {
+    await saveRating(id, { onTarget, repairPerformed, accuracyScore, comment })
     await refresh()
+  }
+
+  const handleRateAndTrash = async (ratingPayload) => {
+    setBusy(true)
+    try {
+      await saveRating(id, ratingPayload)
+      await archiveIntake(id)
+      await refresh()
+      setRateBeforeTrashOpen(false)
+      navigate(`/shop/${slug}/intakes`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleSkipAndTrash = async () => {
+    setBusy(true)
+    try {
+      await archiveIntake(id)
+      await refresh()
+      setRateBeforeTrashOpen(false)
+      navigate(`/shop/${slug}/intakes`)
+    } finally {
+      setBusy(false)
+    }
   }
 
   const downloadPdf = async () => {
@@ -130,7 +156,11 @@ export default function IntakeDetail() {
             </button>
           )}
           <button
-            onClick={() => setTrashConfirmOpen(true)}
+            onClick={() => {
+              const needsRatingBeforeTrash = Boolean(brief) && !intake.rating
+              if (needsRatingBeforeTrash) setRateBeforeTrashOpen(true)
+              else setTrashConfirmOpen(true)
+            }}
             className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-danger hover:border-danger/50"
           >
             <Trash2 size={13} /> Trash
@@ -171,6 +201,18 @@ export default function IntakeDetail() {
                 · Repair performed: <span className="text-text/80">{intake.rating.repair_performed}</span>
               </>
             )}
+            {intake.rating.accuracy_score != null && (
+              <>
+                {' '}
+                · Accuracy: <span className="text-text/80">{intake.rating.accuracy_score}/100</span>
+              </>
+            )}
+            {intake.rating.comment && (
+              <>
+                {' '}
+                · &ldquo;{intake.rating.comment}&rdquo;
+              </>
+            )}
           </p>
         ) : brief ? (
           <RatingForm onSubmit={handleRate} />
@@ -188,6 +230,14 @@ export default function IntakeDetail() {
           body="It will disappear from Overview and the default Intakes view, but stays in the database and can be restored from the Archived filter."
           onCancel={() => setTrashConfirmOpen(false)}
           onConfirm={handleTrash}
+          busy={busy}
+        />
+      )}
+      {rateBeforeTrashOpen && (
+        <RateBeforeTrashModal
+          onClose={() => setRateBeforeTrashOpen(false)}
+          onSave={handleRateAndTrash}
+          onSkip={handleSkipAndTrash}
           busy={busy}
         />
       )}
@@ -245,6 +295,40 @@ function FlagModal({ onClose, onSubmit, busy }) {
           className="mt-5 w-full rounded-xl bg-brand py-2.5 text-sm font-semibold text-ink hover:bg-brand-dim disabled:opacity-50"
         >
           Flag intake
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function RateBeforeTrashModal({ onClose, onSave, onSkip, busy }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 px-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border border-line bg-panel p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="font-medium text-text">Before you close this out</h3>
+          <button onClick={onClose} className="text-text-mute hover:text-text">
+            <X size={16} />
+          </button>
+        </div>
+        <p className="mt-2 text-sm text-text-dim">How did Greenlit do? Your feedback trains the model.</p>
+
+        <div className="mt-4">
+          <RatingForm onSubmit={onSave} submitLabel="Save & mark complete" />
+        </div>
+
+        <button
+          onClick={onSkip}
+          disabled={busy}
+          className="mt-3 w-full rounded-xl border border-line py-2.5 text-sm font-medium text-text-dim hover:text-text disabled:opacity-50"
+        >
+          Skip and mark complete
         </button>
       </div>
     </div>

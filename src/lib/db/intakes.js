@@ -45,6 +45,10 @@ export async function createIntake({ shopSlug, vehicle } = {}) {
       brief: null,
       urgency: null,
       category: null,
+      interviewer_prompt_version: import.meta.env.VITE_INTERVIEWER_PROMPT_SHA ?? 'dev',
+      diagnostician_prompt_version: import.meta.env.VITE_DIAGNOSTICIAN_PROMPT_SHA ?? 'dev',
+      ui_rules_version: import.meta.env.VITE_UI_RULES_SHA ?? 'dev',
+      app_build_sha: import.meta.env.VITE_APP_BUILD_SHA ?? 'dev',
     })
     .select('id, shop_id, status, vehicle, created_at')
     .single()
@@ -89,7 +93,7 @@ export async function listShopIntakes(shopSlug) {
 
   const { data: ratings, error: ratingError } = await sb
     .from('intake_ratings')
-    .select('intake_id, on_target, repair_performed, created_at')
+    .select('intake_id, on_target, repair_performed, accuracy_score, comment, created_at')
     .in('intake_id', ids)
 
   if (ratingError) throw ratingError

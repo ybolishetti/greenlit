@@ -8,6 +8,7 @@
     "sync-prompts": "node scripts/sync-prompts.mjs",
     "prebuild": "node scripts/sync-prompts.mjs --check",
     "build": "node scripts/sync-prompts.mjs && vite build",
+    "vercel-build": "bash scripts/inject-build-shas.sh && npm run build",
     "lint": "oxlint",
     "preview": "vite preview",
     "replay-intake": "node scripts/replay-intake.mjs"
