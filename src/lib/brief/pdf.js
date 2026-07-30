@@ -25,7 +25,7 @@ async function loadDownscaledJpeg(url, maxWidth = MAX_PHOTO_WIDTH_PX) {
  * causes -> components to inspect -> raw evidence (photos embedded,
  * audio/video linked) -> disclaimer.
  */
-export async function buildBriefPdf({ brief, intake, media = [], filename }) {
+export async function buildBriefPdf({ brief, intake, media = [], filename, demoFooter = false }) {
   const doc = new jsPDF()
   let y = 20
   const line = (text, size = 11, gap = 7, color = [20, 20, 20]) => {
@@ -114,6 +114,11 @@ export async function buildBriefPdf({ brief, intake, media = [], filename }) {
   if (brief.disclaimer) {
     y += 4
     line(brief.disclaimer, 9, 6, [120, 120, 120])
+  }
+
+  if (demoFooter) {
+    y += 4
+    line('DEMO — Ridge Auto Service — fictional data', 9, 6, [180, 120, 40])
   }
 
   doc.save(filename)

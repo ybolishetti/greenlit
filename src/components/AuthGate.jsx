@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { isSupabaseConfigured } from '../lib/supabase'
 import { getSession, signInWithMagicLink } from '../lib/db'
+import { isDemoShop } from '../lib/demoShop'
 
 export default function AuthGate({ shopSlug, children }) {
   const [session, setSession] = useState(null)
@@ -19,6 +20,10 @@ export default function AuthGate({ shopSlug, children }) {
       setLoading(false)
     })
   }, [])
+
+  if (isDemoShop(shopSlug)) {
+    return children({ session: { user: { email: 'demo@viewer' } } })
+  }
 
   if (!isSupabaseConfigured) {
     return (

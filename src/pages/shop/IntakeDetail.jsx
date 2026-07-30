@@ -9,14 +9,23 @@ import CustomerVerbatim from '../../components/brief/CustomerVerbatim'
 import ProbableCauses from '../../components/brief/ProbableCauses'
 import InspectionTargets from '../../components/brief/InspectionTargets'
 import RawEvidence from '../../components/brief/RawEvidence'
+import DemoActionExplainer from '../../components/DemoActionExplainer'
 import { buildBriefPdf } from '../../lib/brief/pdf'
+import { demoBundles } from '../../lib/demoShop'
+import { useDemoShopState } from '../../context/DemoShopContext'
 
 const FLAG_REASONS = ['Inappropriate', 'Test/spam', 'Duplicate', 'Other']
+
+const DEMO_ARCHIVE_NOTICE =
+  "In a real shop, this intake would move to your archive and disappear from your feed. In the demo, it stays visible under the Archived filter so you can keep exploring."
+const DEMO_RATE_NOTICE =
+  "In a real shop, this rating would be saved to your account. In the demo, it's kept only in this browser tab — refresh to reset."
 
 export default function IntakeDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { intakes, refresh, slug } = useOutletContext()
+  const { intakes, refresh, slug, isDemo } = useOutletContext()
+  const demoState = useDemoShopState()
 
   const intake = intakes.find((i) => i.id === id)
 
@@ -27,14 +36,21 @@ export default function IntakeDetail() {
   const [rateBeforeTrashOpen, setRateBeforeTrashOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [pdfBusy, setPdfBusy] = useState(false)
+  const [demoNotice, setDemoNotice] = useState(null)
 
   useEffect(() => {
+    setDemoNotice(null)
+    if (isDemo) {
+      setBundle(demoBundles[id] ?? { messages: [], media: [] })
+      setBundleError(null)
+      return
+    }
     setBundle(null)
     setBundleError(null)
     getIntake(id)
       .then(setBundle)
       .catch((err) => setBundleError(err.message))
-  }, [id])
+  }, [id, isDemo])
 
   if (!intake) {
     return <p className="text-sm text-text-dim">Intake not found.</p>
@@ -45,6 +61,11 @@ export default function IntakeDetail() {
   const guidedAnswers = (bundle?.messages ?? []).filter((m) => m.role === 'user' || m.role === 'interviewer')
 
   const handleFlag = async (reason) => {
+    if (isDemo) {
+      demoState.setFlag(id, reason)
+      setFlagModalOpen(false)
+      return
+    }
     setBusy(true)
     try {
       await flagIntake(id, reason)
@@ -56,6 +77,10 @@ export default function IntakeDetail() {
   }
 
   const handleUnflag = async () => {
+    if (isDemo) {
+      demoState.clearFlag(id)
+      return
+    }
     setBusy(true)
     try {
       await unflagIntake(id)
@@ -66,6 +91,12 @@ export default function IntakeDetail() {
   }
 
   const handleTrash = async () => {
+    if (isDemo) {
+      demoState.archive(id)
+      setTrashConfirmOpen(false)
+      setDemoNotice(DEMO_ARCHIVE_NOTICE)
+      return
+    }
     setBusy(true)
     try {
       await archiveIntake(id)
@@ -78,11 +109,23 @@ export default function IntakeDetail() {
   }
 
   const handleRate = async ({ onTarget, repairPerformed, accuracyScore, comment }) => {
+    if (isDemo) {
+      demoState.setRating(id, { onTarget, repairPerformed, accuracyScore, comment })
+      setDemoNotice(DEMO_RATE_NOTICE)
+      return
+    }
     await saveRating(id, { onTarget, repairPerformed, accuracyScore, comment })
     await refresh()
   }
 
   const handleRateAndTrash = async (ratingPayload) => {
+    if (isDemo) {
+      demoState.setRating(id, ratingPayload)
+      demoState.archive(id)
+      setRateBeforeTrashOpen(false)
+      setDemoNotice(DEMO_ARCHIVE_NOTICE)
+      return
+    }
     setBusy(true)
     try {
       await saveRating(id, ratingPayload)
@@ -96,6 +139,12 @@ export default function IntakeDetail() {
   }
 
   const handleSkipAndTrash = async () => {
+    if (isDemo) {
+      demoState.archive(id)
+      setRateBeforeTrashOpen(false)
+      setDemoNotice(DEMO_ARCHIVE_NOTICE)
+      return
+    }
     setBusy(true)
     try {
       await archiveIntake(id)
@@ -111,7 +160,13 @@ export default function IntakeDetail() {
     if (!brief) return
     setPdfBusy(true)
     try {
-      await buildBriefPdf({ brief, intake, media: bundle?.media ?? [], filename: `greenlit-brief-${id}.pdf` })
+      await buildBriefPdf({
+        brief,
+        intake,
+        media: bundle?.media ?? [],
+        filename: `greenlit-brief-${id}.pdf`,
+        demoFooter: isDemo,
+      })
     } finally {
       setPdfBusy(false)
     }
@@ -167,6 +222,8 @@ export default function IntakeDetail() {
           </button>
         </div>
       </div>
+
+      <DemoActionExplainer message={demoNotice} onDismiss={() => setDemoNotice(null)} />
 
       <UrgencyBanner urgency={urgency} urgencyLabel={brief?.urgencyLabel} estimateRange={brief?.estimateRange} />
       <CustomerVerbatim symptomLanguage={brief?.symptomLanguage} />
