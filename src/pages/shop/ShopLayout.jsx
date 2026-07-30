@@ -2,9 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { LogOut, Menu, X } from 'lucide-react'
 import AuthGate from '../../components/AuthGate'
+import DemoBanner from '../../components/DemoBanner'
 import { getShopBySlug, listShopIntakes, signOut } from '../../lib/db'
 import { useAuth } from '../../context/AuthContext'
 import { isAdminEmail } from '../../lib/adminAllowlist'
+import { demoIntakes, demoShop, isDemoShop } from '../../lib/demoShop'
+import { useDemoShopState } from '../../context/DemoShopContext'
 
 const POLL_INTERVAL_MS = 30000
 
@@ -30,6 +33,8 @@ function ShopLayoutInner({ slug, session }) {
   const navigate = useNavigate()
   const location = useLocation()
   const { shopMemberships, user, loading: authLoading } = useAuth()
+  const demo = isDemoShop(slug)
+  const demoState = useDemoShopState()
 
   const [shop, setShop] = useState(null)
   const [intakes, setIntakes] = useState([])
@@ -62,6 +67,11 @@ function ShopLayoutInner({ slug, session }) {
   }, [drawerOpen, closeDrawer])
 
   const refresh = useCallback(async () => {
+    if (demo) {
+      setShop(demoShop)
+      setLoaded(true)
+      return
+    }
     const shopRow = await getShopBySlug(slug)
     setShop(shopRow)
     try {
@@ -70,13 +80,16 @@ function ShopLayoutInner({ slug, session }) {
       console.error('Failed to load intakes:', err)
     }
     setLoaded(true)
-  }, [slug])
+  }, [slug, demo])
 
   useEffect(() => {
     refresh()
+    if (demo) return
     const interval = window.setInterval(refresh, POLL_INTERVAL_MS)
     return () => window.clearInterval(interval)
-  }, [refresh])
+  }, [refresh, demo])
+
+  const effectiveIntakes = demo ? demoState.applyOverlay(demoIntakes) : intakes
 
   if (authLoading) {
     return <p className="py-20 text-center text-text-dim">Loading…</p>
@@ -85,7 +98,7 @@ function ShopLayoutInner({ slug, session }) {
   const isMember = shopMemberships.some((m) => m.shops?.slug === slug)
   const isAdmin = isAdminEmail(user?.email)
 
-  if (!isMember && !isAdmin) {
+  if (!demo && !isMember && !isAdmin) {
     return <Navigate to="/" replace />
   }
 
@@ -130,8 +143,10 @@ function ShopLayoutInner({ slug, session }) {
       </nav>
 
       <button
-        onClick={handleSignOut}
-        className="mt-8 inline-flex items-center gap-1.5 text-sm text-text-dim hover:text-text"
+        onClick={demo ? undefined : handleSignOut}
+        disabled={demo}
+        title={demo ? 'Disabled in the demo.' : undefined}
+        className="mt-8 inline-flex items-center gap-1.5 text-sm text-text-dim hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
       >
         <LogOut size={14} /> Sign out
       </button>
@@ -140,40 +155,43 @@ function ShopLayoutInner({ slug, session }) {
   )
 
   return (
-    <div className="mx-auto flex max-w-5xl gap-8 px-6 py-12">
-      <aside className="hidden w-48 shrink-0 md:block">{renderNavContent()}</aside>
+    <>
+      {demo && <DemoBanner variant="shop" />}
+      <div className="mx-auto flex max-w-5xl gap-8 px-6 py-12">
+        <aside className="hidden w-48 shrink-0 md:block">{renderNavContent()}</aside>
 
-      {drawerOpen && (
-        <div className="fixed inset-0 z-40 bg-ink/60 md:hidden" onClick={closeDrawer} />
-      )}
+        {drawerOpen && (
+          <div className="fixed inset-0 z-40 bg-ink/60 md:hidden" onClick={closeDrawer} />
+        )}
 
-      <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 transform border-r border-line bg-panel p-6 transition-transform md:hidden ${
-          drawerOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-        aria-hidden={!drawerOpen}
-      >
-        <button
-          onClick={closeDrawer}
-          aria-label="Close menu"
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim hover:text-text"
+        <div
+          className={`fixed inset-y-0 left-0 z-50 w-64 transform border-r border-line bg-panel p-6 transition-transform md:hidden ${
+            drawerOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+          aria-hidden={!drawerOpen}
         >
-          <X size={18} />
-        </button>
-        {renderNavContent(closeDrawer)}
-      </div>
+          <button
+            onClick={closeDrawer}
+            aria-label="Close menu"
+            className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim hover:text-text"
+          >
+            <X size={18} />
+          </button>
+          {renderNavContent(closeDrawer)}
+        </div>
 
-      <div className="min-w-0 flex-1">
-        <button
-          ref={hamburgerRef}
-          onClick={() => setDrawerOpen(true)}
-          aria-label="Open menu"
-          className="mb-6 inline-flex items-center gap-1.5 text-sm text-text-dim hover:text-text md:hidden"
-        >
-          <Menu size={20} />
-        </button>
-        <Outlet context={{ shop, intakes, refresh, loaded, isAdmin, slug }} />
+        <div className="min-w-0 flex-1">
+          <button
+            ref={hamburgerRef}
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Open menu"
+            className="mb-6 inline-flex items-center gap-1.5 text-sm text-text-dim hover:text-text md:hidden"
+          >
+            <Menu size={20} />
+          </button>
+          <Outlet context={{ shop, intakes: effectiveIntakes, refresh, loaded, isAdmin, slug, isDemo: demo }} />
+        </div>
       </div>
-    </div>
+    </>
   )
 }

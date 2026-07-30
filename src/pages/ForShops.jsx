@@ -41,40 +41,10 @@ const VALUE_PROPS = [
   },
 ]
 
-const PRICING = [
-  {
-    id: 'standard',
-    name: 'Standard',
-    price: '$149/mo',
-    intakes: '100 intakes included',
-    overage: '$1.50 each after',
-  },
-  {
-    id: 'growth',
-    name: 'Growth',
-    price: '$349/mo',
-    intakes: '300 intakes included',
-    overage: '$1.25 each after',
-    popular: true,
-  },
-  {
-    id: 'high_volume',
-    name: 'High-volume',
-    price: 'Custom',
-    intakes: 'Custom volume',
-    overage: 'Custom',
-    cta: 'Talk to us',
-  },
-]
-
 const FAQS = [
   {
     q: 'How do you count an intake?',
     a: 'Any completed customer intake that produces a mechanic brief. Abandoned/incomplete sessions don’t count.',
-  },
-  {
-    q: 'Do you charge per staff member?',
-    a: 'No. Every plan includes unlimited seats — front desk, service advisors, techs, however you’re set up.',
   },
   {
     q: 'How long is the pilot?',
@@ -121,7 +91,6 @@ export default function ForShops() {
       <HowItWorks />
       <ValueProps />
       <SelfServeCta />
-      <Pricing />
       <FAQ />
       <ContactSection />
       <FooterCta />
@@ -213,56 +182,6 @@ function ValueProps() {
             <p className="mt-1 text-sm text-white/50">{desc}</p>
           </div>
         ))}
-      </div>
-    </section>
-  )
-}
-
-function Pricing() {
-  return (
-    <section className="border-t border-line/60 bg-panel/40">
-      <div className="mx-auto max-w-6xl px-6 py-16">
-        <h2 className="text-center text-2xl font-semibold text-white">Pricing</h2>
-        <p className="mx-auto mt-2 max-w-xl text-center text-white/50">
-          Flat platform fee, usage-based intakes. Unlimited staff seats on every plan.
-        </p>
-        <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
-          {PRICING.map((plan) => (
-            <div
-              key={plan.id}
-              className={`relative rounded-2xl border p-6 ${
-                plan.popular ? 'border-brand bg-brand-soft' : 'border-line bg-panel'
-              }`}
-            >
-              {plan.popular && (
-                <span className="absolute -top-3 right-6 rounded-full bg-brand px-3 py-1 text-xs font-semibold text-ink">
-                  Most popular
-                </span>
-              )}
-              <h3 className="font-medium text-white">{plan.name}</h3>
-              <p className="mt-2 text-3xl font-semibold text-white">{plan.price}</p>
-              <ul className="mt-4 space-y-2 text-sm text-white/60">
-                <li>{plan.intakes}</li>
-                <li>Overage: {plan.overage}</li>
-                <li>Unlimited staff seats</li>
-                <li>Branded QR kit (PDF)</li>
-                <li>Full mechanic brief with audio/photo</li>
-                <li>Outcome rating dashboard</li>
-                <li>Email support</li>
-              </ul>
-              <a
-                href="#contact"
-                className={`mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-colors ${
-                  plan.popular
-                    ? 'bg-brand text-ink hover:bg-brand-dim'
-                    : 'border border-line text-white hover:border-brand/50'
-                }`}
-              >
-                {plan.cta || 'Talk to us'}
-              </a>
-            </div>
-          ))}
-        </div>
       </div>
     </section>
   )

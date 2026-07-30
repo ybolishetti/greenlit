@@ -4,9 +4,10 @@ import { Trash2, X } from 'lucide-react'
 import { getShopMembersWithEmail, removeShopMember } from '../../lib/db/shopMembership'
 import { invite, listPending, revokePending } from '../../lib/db/pendingShopMembers'
 import { useAuth } from '../../context/AuthContext'
+import { demoMembers } from '../../lib/demoShop'
 
 export default function TeamTab() {
-  const { shop } = useOutletContext()
+  const { shop, isDemo } = useOutletContext()
   const { user, shopMemberships } = useAuth()
   const [members, setMembers] = useState([])
   const [loaded, setLoaded] = useState(false)
@@ -16,8 +17,14 @@ export default function TeamTab() {
 
   const myRole = shopMemberships.find((m) => m.shops?.slug === shop?.slug)?.role
   const isOwner = myRole === 'owner'
+  const showInvite = isDemo || isOwner
 
   const refresh = useCallback(async () => {
+    if (isDemo) {
+      setMembers(demoMembers)
+      setLoaded(true)
+      return
+    }
     if (!shop?.id) return
     try {
       const rows = await getShopMembersWithEmail(shop.id)
@@ -27,16 +34,16 @@ export default function TeamTab() {
     } finally {
       setLoaded(true)
     }
-  }, [shop?.id])
+  }, [shop?.id, isDemo])
 
   const refreshPending = useCallback(async () => {
-    if (!shop?.id || !isOwner) return
+    if (isDemo || !shop?.id || !isOwner) return
     try {
       setPending(await listPending(shop.id))
     } catch (err) {
       setError(err.message)
     }
-  }, [shop?.id, isOwner])
+  }, [shop?.id, isOwner, isDemo])
 
   useEffect(() => {
     refresh()
@@ -61,10 +68,12 @@ export default function TeamTab() {
     <div>
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold text-text">Team</h2>
-        {isOwner && (
+        {showInvite && (
           <button
             onClick={() => setInviteOpen(true)}
-            className="rounded-lg bg-brand-soft px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/20"
+            disabled={isDemo}
+            title={isDemo ? 'Disabled in the demo.' : undefined}
+            className="rounded-lg bg-brand-soft px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Invite teammate
           </button>
@@ -83,7 +92,7 @@ export default function TeamTab() {
               <p className="text-sm text-text">{m.email}</p>
               <p className="text-xs capitalize text-text-mute">{m.role}</p>
             </div>
-            {isOwner && m.user_id !== user?.id && (
+            {!isDemo && isOwner && m.user_id !== user?.id && (
               <button
                 onClick={() => handleRemove(m.user_id)}
                 className="inline-flex items-center gap-1 text-xs text-danger hover:underline"
@@ -98,7 +107,7 @@ export default function TeamTab() {
         )}
       </div>
 
-      {isOwner && (
+      {showInvite && (
         <div className="mt-8">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-text-mute">
             Pending invites

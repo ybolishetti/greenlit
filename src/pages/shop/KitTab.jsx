@@ -165,7 +165,7 @@ function renderPanel(
 }
 
 export default function KitTab() {
-  const { shop, slug } = useOutletContext()
+  const { shop, slug, isDemo } = useOutletContext()
   const qrWrapRef = useRef(null)
   const [copied, setCopied] = useState(false)
   const qrUrl = `${window.location.origin}/i/${slug}`
@@ -311,7 +311,9 @@ export default function KitTab() {
         <div className="mt-6 flex flex-wrap gap-3">
           <button
             onClick={downloadPng}
-            className="inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2.5 text-sm font-medium text-text hover:border-brand/50"
+            disabled={isDemo}
+            title={isDemo ? 'Disabled in the demo.' : undefined}
+            className="inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2.5 text-sm font-medium text-text hover:border-brand/50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Download size={15} /> Download PNG
           </button>
@@ -331,7 +333,9 @@ export default function KitTab() {
             <div>
               <button
                 onClick={downloadLetterPdf}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-ink hover:bg-brand-dim"
+                disabled={isDemo}
+                title={isDemo ? 'Disabled in the demo.' : undefined}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-ink hover:bg-brand-dim disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Download size={15} /> Letter (11" × 8.5") flyer
               </button>
@@ -340,7 +344,9 @@ export default function KitTab() {
             <div>
               <button
                 onClick={downloadCounterCardPdf}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-ink hover:bg-brand-dim"
+                disabled={isDemo}
+                title={isDemo ? 'Disabled in the demo.' : undefined}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-ink hover:bg-brand-dim disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Download size={15} /> Counter card (5.5" × 8.5")
               </button>
@@ -349,7 +355,9 @@ export default function KitTab() {
             <div>
               <button
                 onClick={downloadTableTentPdf}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-ink hover:bg-brand-dim"
+                disabled={isDemo}
+                title={isDemo ? 'Disabled in the demo.' : undefined}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-ink hover:bg-brand-dim disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Download size={15} /> Table tent (folded 5.5" × 8.5")
               </button>

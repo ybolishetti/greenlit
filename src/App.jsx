@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
+import { DemoShopProvider } from './context/DemoShopContext'
 import Navbar from './components/Navbar'
 import ConsumerRouteGuard from './components/ConsumerRouteGuard'
 import Landing from './pages/Landing'
@@ -29,29 +30,31 @@ function App() {
       <div className="min-h-screen bg-ink text-text">
         <Navbar />
         <main>
-          <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/intake" element={<ConsumerRouteGuard><IntakeNew /></ConsumerRouteGuard>} />
-            <Route path="/intake/:id" element={<ConsumerRouteGuard><IntakeSession /></ConsumerRouteGuard>} />
-            <Route path="/brief/:id" element={<BriefResult />} />
-            <Route path="/account" element={<ConsumerRouteGuard><Account /></ConsumerRouteGuard>} />
-            <Route path="/account/:id" element={<ConsumerRouteGuard><AccountBrief /></ConsumerRouteGuard>} />
-            <Route path="/i/:slug" element={<ShopQrRedirect />} />
-            <Route path="/shop/:slug" element={<ShopLayout />}>
-              <Route index element={<OverviewTab />} />
-              <Route path="intakes" element={<IntakesTab />} />
-              <Route path="intakes/:id" element={<IntakeDetail />} />
-              <Route path="kit" element={<KitTab />} />
-              <Route path="team" element={<TeamTab />} />
-              <Route path="settings" element={<SettingsTab />} />
-            </Route>
-            <Route path="/for-shops" element={<ForShops />} />
-            <Route path="/for-shops/signup" element={<ShopSignup />} />
-            <Route path="/admin/shops" element={<AdminShops />} />
-            <Route path="/dev/intake/:id" element={<IntakeDebug />} />
-            <Route path="/dev/consumer-intakes" element={<ConsumerIntakesDebug />} />
-            <Route path="/dev/annotate" element={<AnnotationTool />} />
-          </Routes>
+          <DemoShopProvider>
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/intake" element={<ConsumerRouteGuard><IntakeNew /></ConsumerRouteGuard>} />
+              <Route path="/intake/:id" element={<ConsumerRouteGuard><IntakeSession /></ConsumerRouteGuard>} />
+              <Route path="/brief/:id" element={<BriefResult />} />
+              <Route path="/account" element={<ConsumerRouteGuard><Account /></ConsumerRouteGuard>} />
+              <Route path="/account/:id" element={<ConsumerRouteGuard><AccountBrief /></ConsumerRouteGuard>} />
+              <Route path="/i/:slug" element={<ShopQrRedirect />} />
+              <Route path="/shop/:slug" element={<ShopLayout />}>
+                <Route index element={<OverviewTab />} />
+                <Route path="intakes" element={<IntakesTab />} />
+                <Route path="intakes/:id" element={<IntakeDetail />} />
+                <Route path="kit" element={<KitTab />} />
+                <Route path="team" element={<TeamTab />} />
+                <Route path="settings" element={<SettingsTab />} />
+              </Route>
+              <Route path="/for-shops" element={<ForShops />} />
+              <Route path="/for-shops/signup" element={<ShopSignup />} />
+              <Route path="/admin/shops" element={<AdminShops />} />
+              <Route path="/dev/intake/:id" element={<IntakeDebug />} />
+              <Route path="/dev/consumer-intakes" element={<ConsumerIntakesDebug />} />
+              <Route path="/dev/annotate" element={<AnnotationTool />} />
+            </Routes>
+          </DemoShopProvider>
         </main>
         <footer className="flex items-center justify-center gap-2 border-t border-line/60 py-8 text-center text-xs text-text-mute">
           <img src="/logo.png" alt="" className="h-4 w-4" />
