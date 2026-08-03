@@ -18,6 +18,11 @@ export const QUESTION_INTENTS = [
   'motion_capture',
   'safety_confirmation',
   'freeform_description',
+  // Added for the Anthropic-powered diagnosis engine (2026-08-03)
+  'smell_description',
+  'driving_conditions',
+  'recent_repairs',
+  'fluid_check',
 ]
 
 const TIMING_OPTIONS = [
@@ -67,6 +72,46 @@ const WARNING_LIGHT_OPTIONS = [
   { value: 'tire-pressure', label: 'Tire pressure (TPMS)' },
   { value: 'none', label: 'No warning lights' },
   { value: 'other', label: 'Other warning light' },
+]
+
+const SMELL_OPTIONS = [
+  { value: 'burning-rubber', label: 'Burning rubber' },
+  { value: 'sweet-syrup', label: 'Sweet / syrupy (coolant)' },
+  { value: 'rotten-egg', label: 'Rotten eggs (exhaust / catalytic)' },
+  { value: 'burning-oil', label: 'Burning oil' },
+  { value: 'gas-fuel', label: 'Raw gas / fuel' },
+  { value: 'electrical-burning', label: 'Burning plastic / electrical' },
+  { value: 'none', label: 'No unusual smell' },
+]
+
+const DRIVING_CONDITIONS_OPTIONS = [
+  { value: 'cold-start', label: 'Cold start / first drive of the day' },
+  { value: 'city-stop-go', label: 'City / stop-and-go' },
+  { value: 'highway', label: 'Highway / sustained speed' },
+  { value: 'uphill-load', label: 'Uphill or towing / loaded' },
+  { value: 'rough-roads', label: 'Rough or bumpy roads' },
+  { value: 'after-warmup', label: 'Only once warmed up' },
+]
+
+const RECENT_REPAIRS_OPTIONS = [
+  { value: 'brakes', label: 'Brakes' },
+  { value: 'tires-wheels', label: 'Tires / wheels' },
+  { value: 'battery-electrical', label: 'Battery / electrical' },
+  { value: 'oil-fluids', label: 'Oil / fluid change' },
+  { value: 'suspension-steering', label: 'Suspension / steering' },
+  { value: 'engine-work', label: 'Engine work' },
+  { value: 'other', label: 'Other' },
+  { value: 'none', label: 'No recent work' },
+]
+
+const FLUID_CHECK_OPTIONS = [
+  { value: 'oil', label: 'Oil (brown / black)' },
+  { value: 'coolant', label: 'Coolant (green / orange / pink)' },
+  { value: 'transmission', label: 'Transmission (red)' },
+  { value: 'power-steering', label: 'Power steering' },
+  { value: 'brake-fluid', label: 'Brake fluid' },
+  { value: 'unknown-puddle', label: 'Puddle, unsure what' },
+  { value: 'none', label: "No leaks / haven't noticed" },
 ]
 
 const INTENT_UI_MAP = {
@@ -139,6 +184,25 @@ const INTENT_UI_MAP = {
     trueLabel: 'Yes, it feels safe to drive',
     falseLabel: 'No, I would not drive it',
   },
+  smell_description: {
+    type: 'multi_select',
+    options: SMELL_OPTIONS,
+    mutexValue: 'none',
+  },
+  driving_conditions: {
+    type: 'multi_select',
+    options: DRIVING_CONDITIONS_OPTIONS,
+  },
+  recent_repairs: {
+    type: 'multi_select',
+    options: RECENT_REPAIRS_OPTIONS,
+    mutexValue: 'none',
+  },
+  fluid_check: {
+    type: 'multi_select',
+    options: FLUID_CHECK_OPTIONS,
+    mutexValue: 'none',
+  },
   freeform_description: {
     type: 'natural_language',
     placeholder: 'Describe what you notice in your own words…',
@@ -146,11 +210,49 @@ const INTENT_UI_MAP = {
 }
 
 /**
+ * Split a raw question_intent string into its base intent and an optional
+ * custom-probe phrasing hint the Diagnostician may have appended.
+ *
+ * The Diagnostician communicates phrasing hints to the Interviewer via
+ * `needs_more_info` entries shaped "<intent>:<probe text>" (e.g.
+ * "visible_damage:need a close-up of the driver-side CV boot"). The
+ * Interviewer is instructed to echo only the base intent back in its own
+ * `question_intent` output, so in normal operation a suffixed value should
+ * never reach this function — QuestionIntentSchema validation on the raw
+ * LLM output rejects it first. This exists as defense-in-depth for legacy
+ * records or a misbehaving model, and splits on the *first* colon only,
+ * since the probe text itself may contain colons (e.g. a time like "3:00").
+ *
+ * @param {string} rawIntent
+ * @returns {{ intent: string, customProbe: string | null }}
+ */
+export function parseIntent(rawIntent) {
+  if (typeof rawIntent !== 'string' || rawIntent.trim().length === 0) {
+    return { intent: 'freeform_description', customProbe: null }
+  }
+
+  const idx = rawIntent.indexOf(':')
+  if (idx === -1) {
+    return { intent: rawIntent.trim(), customProbe: null }
+  }
+
+  const base = rawIntent.slice(0, idx).trim()
+  const probe = rawIntent.slice(idx + 1).trim()
+
+  if (base.length === 0) {
+    return { intent: 'freeform_description', customProbe: null }
+  }
+
+  return { intent: base, customProbe: probe.length ? probe : null }
+}
+
+/**
  * @param {string} intent
  * @returns {import('../ai/schemas.js').UISchema extends infer T ? T : never}
  */
 export function selectUIForIntent(intent) {
-  const normalized = QUESTION_INTENTS.includes(intent) ? intent : 'freeform_description'
+  const { intent: base } = parseIntent(intent)
+  const normalized = QUESTION_INTENTS.includes(base) ? base : 'freeform_description'
   return INTENT_UI_MAP[normalized]
 }
 
@@ -160,11 +262,12 @@ export function selectUIForIntent(intent) {
  */
 export function enrichQuestionWithUI(question) {
   if (question.ui) return question
-  const intent = question.question_intent ?? 'freeform_description'
+  const { intent } = parseIntent(question.question_intent ?? 'freeform_description')
+  const normalized = QUESTION_INTENTS.includes(intent) ? intent : 'freeform_description'
   return {
     ...question,
-    question_intent: QUESTION_INTENTS.includes(intent) ? intent : 'freeform_description',
-    ui: selectUIForIntent(intent),
+    question_intent: normalized,
+    ui: selectUIForIntent(normalized),
   }
 }
 

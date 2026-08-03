@@ -8,6 +8,8 @@ import { useAuth } from '../context/AuthContext'
 import { useStartIntake } from '../hooks/useIntakeAccess'
 import { getOrCreateDeviceId, markIntakeSessionUsed, setPendingClaim } from '../lib/deviceId'
 import UrgencyBanner from '../components/brief/UrgencyBanner'
+import LowConfidenceBanner from '../components/brief/LowConfidenceBanner'
+import FallbackBanner from '../components/brief/FallbackBanner'
 import VehicleLine from '../components/brief/VehicleLine'
 import CustomerVerbatim from '../components/brief/CustomerVerbatim'
 import ProbableCauses from '../components/brief/ProbableCauses'
@@ -198,6 +200,8 @@ export default function BriefResult() {
       )}
 
       <UrgencyBanner urgency={brief.urgency} urgencyLabel={brief.urgencyLabel} estimateRange={brief.estimateRange} />
+      <LowConfidenceBanner lowConfidence={intake?.low_confidence} />
+      <FallbackBanner fallbackUsed={intake?.fallback_used} />
       <VehicleLine vehicle={intake?.vehicle} />
       <CustomerVerbatim symptomLanguage={brief.symptomLanguage} />
       <ProbableCauses probableCauses={brief.probableCauses} />

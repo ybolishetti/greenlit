@@ -80,7 +80,7 @@ export async function listShopIntakes(shopSlug) {
   const { data, error } = await sb
     .from('intakes')
     .select(
-      'id, shop_id, status, brief, urgency, category, customer_name, vehicle, created_at, updated_at, flagged, flagged_reason, flagged_at, archived_at'
+      'id, shop_id, status, brief, urgency, category, customer_name, vehicle, created_at, updated_at, flagged, flagged_reason, flagged_at, archived_at, low_confidence, fallback_used'
     )
     .eq('shop_id', shop.id)
     .order('created_at', { ascending: false })
@@ -106,12 +106,12 @@ export async function listShopIntakes(shopSlug) {
   }))
 }
 
-export async function completeIntakeStub(intakeId, brief) {
+export async function completeIntakeStub(intakeId, brief, fallbackUsed = false) {
   if (!isSupabaseConfigured) {
     memoryCompleteIntake(intakeId, brief)
     return
   }
-  await invokeEdge('diagnostician_final', intakeId, { stub_brief: brief })
+  await invokeEdge('diagnostician_final', intakeId, { stub_brief: brief, fallback_used: fallbackUsed })
 }
 
 export async function updateCustomerName(intakeId, customerName) {

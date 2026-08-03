@@ -88,6 +88,12 @@ export default function IntakeSession() {
     const msgs = bundle.messages
     const round = getCurrentRound(msgs)
     await appendMessage(id, 'system', { type: 'system_event', event: 'round_start', round })
+    // last_hypothesis (including its needs_more_info array) goes straight to
+    // the Interviewer unfiltered — this is also how the Diagnostician's
+    // "custom probe" phrasing hints (needs_more_info entries shaped
+    // "<intent>:<probe text>") reach the Interviewer. Don't add filtering
+    // here; the Interviewer prompt is responsible for reading probes as
+    // hints and echoing only the base intent back.
     const response = await runInterviewer(id, {
       ...buildLlmPayload(bundle),
       total_questions_asked: countQuestionsAsked(msgs),

@@ -40,6 +40,11 @@ export default function IntakeRow({ intake, slug, showStatus = false, showTime =
                 <Flag size={11} /> Flagged
               </span>
             )}
+            {(intake.low_confidence || intake.fallback_used) && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-text-mute/10 px-2 py-0.5 text-[11px] font-medium text-text-dim">
+                {intake.low_confidence ? 'Low confidence' : 'Simplified'}
+              </span>
+            )}
           </p>
           <p className="truncate text-xs text-text-dim">{cardSummary(intake)}</p>
         </div>

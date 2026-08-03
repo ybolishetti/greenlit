@@ -10,6 +10,7 @@
     "build": "node scripts/sync-prompts.mjs && vite build",
     "vercel-build": "bash scripts/inject-build-shas.sh && npm run build",
     "lint": "oxlint",
+    "test": "vitest run",
     "preview": "vite preview",
     "replay-intake": "node scripts/replay-intake.mjs"
   },
@@ -32,6 +33,7 @@
     "oxlint": "^1.71.0",
     "postcss": "^8.5.16",
     "tailwindcss": "^4.3.2",
-    "vite": "^8.1.1"
+    "vite": "^8.1.1",
+    "vitest": "^4.1.10"
   }
 }

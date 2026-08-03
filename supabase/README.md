@@ -66,7 +66,9 @@ In the Supabase dashboard for each environment:
 | `intake_media`   | Audio/video/photo in Storage; text inline    |
 | `intake_ratings` | Mechanic outcome labels (categorical + 0-100 accuracy score + comment) |
 | `llm_call_log`   | Postgres-backed LLM rate-limit counter     |
-| `llm_traces`     | Full LLM call traces (prompts, responses, timing, tokens) — training + debugging |
+| `llm_traces`     | Full LLM call traces (prompts, responses, timing, tokens, cost) — training + debugging. `rules_baseline` column reserved for a future offline eval job, not populated by any code in this repo yet. |
+
+`intakes` also carries `llm_cost_usd`, `llm_cost_capped`, `low_confidence`, and `fallback_used` (added in `0018`) — see the column comments in that migration for exact semantics.
 
 Shops are addressed by **slug** in URLs (`/shop/demo-shop`). All foreign keys use UUID `shops.id`.
 
@@ -74,12 +76,14 @@ Shops are addressed by **slug** in URLs (`/shop/demo-shop`). All foreign keys us
 
 The **Edge Function** is authoritative for final intake fields. On `diagnostician_final`, the Edge Function updates in one transaction:
 
-- `brief` (jsonb)
+- `brief` (jsonb) — post safety-override and low-confidence clamp, never the raw model output
 - `status = 'complete'`
-- `urgency`
-- `category`
+- `urgency`, `category` (denormalized from `brief`)
+- `low_confidence`
+- `llm_cost_usd`
+- `fallback_used` (stub_brief path only — value asserted by the client, since only the client knows whether this stub run followed a real failure)
 
-The browser client never writes these fields.
+The browser client never writes these fields directly.
 
 ## Row Level Security
 
@@ -164,12 +168,15 @@ WHERE called_at < now() - interval '7 days';
 Deploy:
 
 ```bash
-supabase secrets set OPENAI_API_KEY=sk-...
+supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY=...
-# Model swap (no code deploy required):
-supabase secrets set INTERVIEWER_MODEL_ID=gpt-4o-mini
-supabase secrets set DIAGNOSTICIAN_MODEL_ID=gpt-4o
-# Optional custom Diagnostician endpoint:
+# Provider + model swap (no code deploy required); anthropic is the default
+# for both roles, shown explicitly here for clarity:
+supabase secrets set INTERVIEWER_PROVIDER=anthropic
+supabase secrets set DIAGNOSTICIAN_PROVIDER=anthropic
+supabase secrets set INTERVIEWER_MODEL_ID=claude-haiku-4-5
+supabase secrets set DIAGNOSTICIAN_MODEL_ID=claude-sonnet-5
+# Optional custom Diagnostician endpoint (e.g. a future fine-tuned model):
 # supabase secrets set DIAGNOSTICIAN_API_URL=...
 # supabase secrets set DIAGNOSTICIAN_API_KEY=...
 # Prompt versioning for llm_traces (same git-SHA computation as
@@ -180,6 +187,24 @@ supabase secrets set DIAGNOSTICIAN_PROMPT_SHA=$(git log -1 --format=%H -- src/li
 supabase functions deploy llm-proxy
 supabase functions deploy export-training-data
 ```
+
+**OpenAI is still supported for rollback** — the Chat Completions code path was kept, not removed. To roll back without a code deploy:
+
+```bash
+supabase secrets set OPENAI_API_KEY=sk-...
+supabase secrets set INTERVIEWER_PROVIDER=openai
+supabase secrets set DIAGNOSTICIAN_PROVIDER=openai
+supabase secrets set INTERVIEWER_MODEL_ID=gpt-4o-mini
+supabase secrets set DIAGNOSTICIAN_MODEL_ID=gpt-4o
+```
+
+**Kill switch** — to instantly bypass the LLM entirely and fall back to the deterministic stub (e.g. an incident), with no code deploy:
+
+```bash
+supabase secrets set DIAGNOSIS_ENGINE=stub
+```
+
+This makes every LLM intent return `llm_unconfigured`, which the client already treats as a fallback trigger. Set back to `llm` (or unset) to resume.
 
 ### Intents
 
@@ -195,18 +220,28 @@ supabase functions deploy export-training-data
 
 Every LLM response is validated in the Edge Function (Zod via Deno). On validation failure: retry once with schema in the system message; second failure returns a structured error to the client. Unvalidated LLM output is never returned.
 
+Anthropic's Messages API has no native JSON-object response mode (unlike OpenAI's `response_format: json_object`), so the prompts instruct Claude to return a single raw JSON object with no code fences, and the Edge Function strips any ```json fences defensively before parsing either provider's response.
+
+### Safety-urgency validator
+
+After a final brief validates, a deterministic post-parse check (`enforceSafetyRules`/`finalizeBrief` in `index.ts`) scans the conversation for a small set of hard safety patterns — active brake/steering failure, fire/smoke, overheating, airbag/SRS warning — and force-overrides `urgency` to `immediate` when matched, regardless of what the model returned. This is intentionally not prompt-trusted. Overrides are logged to `llm_traces.parse_error` as `safety_override:<reason>`.
+
+### Cost cap
+
+Each intake is capped at **$0.45** of cumulative LLM spend, computed from `llm_traces.input_tokens`/`output_tokens` per model. A call that would exceed the cap returns `402 cost_cap_exceeded`, which the client treats like any other LLM failure (falls back to the stub). `intakes.llm_cost_capped` and `intakes.llm_cost_usd` track this — see the schema overview above.
+
 ### Diagnostician / Interviewer model swap
 
-Both models are swappable at deploy time via Edge Function secrets — no code deploy required:
+Both provider and model are swappable at deploy time via Edge Function secrets — no code deploy required:
 
 ```bash
-supabase secrets set INTERVIEWER_MODEL_ID=gpt-4o-mini
-supabase secrets set DIAGNOSTICIAN_MODEL_ID=gpt-4o
-# Fine-tuned swap when ready:
-supabase secrets set DIAGNOSTICIAN_MODEL_ID=ft:gpt-4o-2024-07:greenlit:diagnostician-v1:abc123
+supabase secrets set INTERVIEWER_PROVIDER=anthropic
+supabase secrets set DIAGNOSTICIAN_PROVIDER=anthropic
+supabase secrets set INTERVIEWER_MODEL_ID=claude-haiku-4-5
+supabase secrets set DIAGNOSTICIAN_MODEL_ID=claude-sonnet-5
 ```
 
-Default: Interviewer `gpt-4o-mini`, Diagnostician `gpt-4o`. Optional `DIAGNOSTICIAN_API_URL` / `DIAGNOSTICIAN_API_KEY` for custom endpoints.
+Default: Interviewer `claude-haiku-4-5`, Diagnostician `claude-sonnet-5`, both via Anthropic. Optional `DIAGNOSTICIAN_API_URL` / `DIAGNOSTICIAN_API_KEY` for a custom endpoint (e.g. a future fine-tuned model), independent of provider. See "OpenAI is still supported for rollback" above to switch either role back to OpenAI.
 
 ### Training data export
 
@@ -272,7 +307,8 @@ npm run build                   # runs sync first
 - `0001_initial_schema.sql` — initial schema (locked; do not edit after landing)
 - `0002_v21_vehicle_annotations.sql` — vehicle jsonb, intake_annotations, user_roles
 - `0017_llm_traces_and_versioning.sql` — llm_traces table, prompt/model/build versioning on intakes, accuracy_score + comment on intake_ratings
-- Future changes: `0018_*.sql`, `0019_*.sql`, etc.
+- `0018_diagnosis_engine_cost_tracking.sql` — llm_cost_usd, llm_cost_capped, low_confidence, fallback_used on intakes; rules_baseline placeholder on llm_traces
+- Future changes: `0019_*.sql`, `0020_*.sql`, etc.
 
 ```bash
 supabase migration new <description>   # create new migration

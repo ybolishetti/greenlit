@@ -16,6 +16,7 @@ export const SingleSelectUISchema = z.object({
 export const MultiSelectUISchema = z.object({
   type: z.literal('multi_select'),
   options: z.array(SelectOptionSchema).min(2).max(8),
+  mutexValue: z.string().optional(),
 })
 
 export const SliderUISchema = z.object({
@@ -83,6 +84,11 @@ export const QuestionIntentSchema = z.enum([
   'motion_capture',
   'safety_confirmation',
   'freeform_description',
+  // Added for the Anthropic-powered diagnosis engine (2026-08-03)
+  'smell_description',
+  'driving_conditions',
+  'recent_repairs',
+  'fluid_check',
 ])
 
 export const InterviewerQuestionSchema = z.object({
@@ -126,15 +132,26 @@ export const InterviewerResponseSchema = z.discriminatedUnion('type', [
   InterviewerDoneSchema,
 ])
 
-export const HypothesisSchema = z.object({
+const HypothesisObjectSchema = z.object({
   type: z.literal('hypothesis'),
   round: z.number().int().min(1).max(3),
   confidence: z.number().min(0).max(1),
-  needs_more_info: z.array(z.string()).min(1).max(5),
+  needs_more_info: z.array(z.string()).max(5).default([]),
   top_causes: z
     .array(z.object({ cause: z.string(), confidence: z.number().min(0).max(1) }))
     .max(3)
     .optional(),
+})
+
+// Round-3, low-confidence hypotheses must stop asking for more info even if
+// the model still lists gaps — server-authoritative so a client bypass can't
+// keep the interview looping past the turn-limit force-done threshold (0.90,
+// distinct from the 0.60 low_confidence flag used elsewhere).
+export const HypothesisSchema = HypothesisObjectSchema.transform((h) => {
+  if (h.round === 3 && h.confidence < 0.9 && h.needs_more_info.length > 0) {
+    return { ...h, needs_more_info: [] }
+  }
+  return h
 })
 
 export const FinalBriefSchema = z.object({
@@ -155,6 +172,11 @@ export const FinalBriefSchema = z.object({
     video: z.boolean(),
     text: z.boolean(),
   }),
+  // Overall diagnostician confidence (0-1). Optional because older/stub
+  // briefs won't carry it; backfilled server-side from the last hypothesis
+  // when the model omits it. Drives intakes.low_confidence (< 0.60) and the
+  // per-cause display clamp — see enforceSafetyRules in index.ts.
+  confidence: z.number().min(0).max(1).optional(),
 })
 
 export function formatZodError(error: z.ZodError) {
@@ -181,7 +203,7 @@ export function schemaHintForIntent(intent: string): string {
     case 'diagnostician_hypothesis':
       return '{"type":"hypothesis","round":1,"confidence":0.5,"needs_more_info":["..."],"top_causes":[{"cause":"...","confidence":0.3}]}'
     case 'diagnostician_final':
-      return '{"type":"final","category":"...","urgency":"monitor","urgencyLabel":"...","probableCauses":[{"cause":"...","confidence":80}],"componentsToInspect":["..."],"estimateRange":[100,400],"symptomLanguage":["\\"quoted customer words\\""],"disclaimer":"...","inputs":{"audio":false,"photo":false,"video":false,"text":true}}'
+      return '{"type":"final","category":"...","urgency":"monitor","urgencyLabel":"...","probableCauses":[{"cause":"...","confidence":80}],"componentsToInspect":["..."],"estimateRange":[100,400],"symptomLanguage":["\\"quoted customer words\\""],"disclaimer":"...","inputs":{"audio":false,"photo":false,"video":false,"text":true},"confidence":0.8}'
     default:
       return ''
   }

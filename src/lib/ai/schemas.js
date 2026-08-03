@@ -85,6 +85,11 @@ export const QuestionIntentSchema = z.enum([
   'motion_capture',
   'safety_confirmation',
   'freeform_description',
+  // Added for the Anthropic-powered diagnosis engine (2026-08-03)
+  'smell_description',
+  'driving_conditions',
+  'recent_repairs',
+  'fluid_check',
 ])
 
 /** LLM output — ui is derived client-side via uiRules.js */
@@ -145,7 +150,7 @@ export const UserAnswerSchema = z.object({
   free_text: z.string().optional(),
 })
 
-export const HypothesisSchema = z.object({
+const HypothesisObjectSchema = z.object({
   type: z.literal('hypothesis'),
   round: z.number().int().min(1).max(3),
   confidence: z.number().min(0).max(1),
@@ -159,6 +164,16 @@ export const HypothesisSchema = z.object({
     )
     .max(3)
     .optional(),
+})
+
+// Mirrors the edge function's transform (supabase/functions/llm-proxy/schemas.ts)
+// for local/stub-mode parity. The edge copy is the server-authoritative one —
+// this exists so stub mode behaves identically, not as a security boundary.
+export const HypothesisSchema = HypothesisObjectSchema.transform((h) => {
+  if (h.round === 3 && h.confidence < 0.9 && h.needs_more_info.length > 0) {
+    return { ...h, needs_more_info: [] }
+  }
+  return h
 })
 
 export const FinalBriefSchema = z.object({
@@ -182,6 +197,9 @@ export const FinalBriefSchema = z.object({
     video: z.boolean(),
     text: z.boolean(),
   }),
+  // Overall diagnostician confidence (0-1). Optional — older/stub briefs may
+  // not carry it. Drives intake.low_confidence (< 0.60) on the server.
+  confidence: z.number().min(0).max(1).optional(),
 })
 
 export const SystemEventSchema = z.object({

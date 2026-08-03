@@ -1,7 +1,7 @@
-const MAX_QUESTIONS = 6
+const MAX_QUESTIONS = 8
 const MAX_ROUNDS = 3
 const MAX_QUESTIONS_PER_ROUND = 3
-const CONFIDENCE_FORCE_DONE = 0.75
+const CONFIDENCE_FORCE_DONE = 0.9
 
 export function countQuestionsAsked(messages) {
   return messages

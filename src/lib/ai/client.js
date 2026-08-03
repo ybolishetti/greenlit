@@ -48,7 +48,7 @@ async function callLlm(intent, intakeId, payload, stubFn, schema) {
     if (err.code === 'validation_failed') {
       throw err
     }
-    if (err.code === 'edge_error' || err.code === 'llm_unconfigured') {
+    if (err.code === 'edge_error' || err.code === 'llm_unconfigured' || err.code === 'cost_cap_exceeded') {
       const raw = await stubFn({ ...payload, intent })
       return schema.parse(raw)
     }
@@ -96,10 +96,10 @@ export async function runDiagnosticianFinal(intakeId, payload) {
     const data = await invokeEdge('diagnostician_final', intakeId, payload)
     return FinalBriefSchema.parse(data.result)
   } catch (err) {
-    if (err.code === 'edge_error' || err.code === 'llm_unconfigured') {
+    if (err.code === 'edge_error' || err.code === 'llm_unconfigured' || err.code === 'cost_cap_exceeded') {
       const raw = await stubDiagnosticianFinal(payload)
       const brief = FinalBriefSchema.parse(raw)
-      await completeIntakeStub(intakeId, brief)
+      await completeIntakeStub(intakeId, brief, true)
       return brief
     }
     throw err
@@ -144,14 +144,14 @@ export async function runDiagnosticianFinalStream(intakeId, payload, onPartial) 
     }
     return FinalBriefSchema.parse(final)
   } catch (err) {
-    if (err.code === 'edge_error' || err.code === 'llm_unconfigured') {
+    if (err.code === 'edge_error' || err.code === 'llm_unconfigured' || err.code === 'cost_cap_exceeded') {
       let final = null
       for await (const partial of stubDiagnosticianFinalStream(payload)) {
         onPartial(partial)
         final = partial
       }
       const brief = FinalBriefSchema.parse(final)
-      await completeIntakeStub(intakeId, brief)
+      await completeIntakeStub(intakeId, brief, true)
       return brief
     }
     throw err

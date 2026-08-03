@@ -5,6 +5,8 @@ import { archiveIntake, flagIntake, getIntake, saveRating, unflagIntake } from '
 import RatingForm from '../../components/shop/RatingForm'
 import { relativeTime, vehicleLabel } from '../../lib/shop/intakeDisplay'
 import UrgencyBanner from '../../components/brief/UrgencyBanner'
+import LowConfidenceBanner from '../../components/brief/LowConfidenceBanner'
+import FallbackBanner from '../../components/brief/FallbackBanner'
 import CustomerVerbatim from '../../components/brief/CustomerVerbatim'
 import ProbableCauses from '../../components/brief/ProbableCauses'
 import InspectionTargets from '../../components/brief/InspectionTargets'
@@ -184,6 +186,11 @@ export default function IntakeDetail() {
                 <Flag size={11} /> Flagged
               </span>
             )}
+            {(intake.low_confidence || intake.fallback_used) && (
+              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-text-mute/10 px-2 py-0.5 text-xs font-medium text-text-dim">
+                {intake.low_confidence ? 'Low confidence' : 'Simplified'}
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -226,6 +233,8 @@ export default function IntakeDetail() {
       <DemoActionExplainer message={demoNotice} onDismiss={() => setDemoNotice(null)} />
 
       <UrgencyBanner urgency={urgency} urgencyLabel={brief?.urgencyLabel} estimateRange={brief?.estimateRange} />
+      <LowConfidenceBanner lowConfidence={intake.low_confidence} />
+      <FallbackBanner fallbackUsed={intake.fallback_used} />
       <CustomerVerbatim symptomLanguage={brief?.symptomLanguage} />
       <ProbableCauses probableCauses={brief?.probableCauses} />
       <InspectionTargets componentsToInspect={brief?.componentsToInspect} />
