@@ -12,6 +12,7 @@
     "lint": "oxlint",
     "test": "vitest run",
     "preview": "vite preview",
+    "deploy-edge": "npm run sync-prompts && supabase functions deploy llm-proxy --project-ref drgvgulfppttyvrvjlxr",
     "replay-intake": "node scripts/replay-intake.mjs"
   },
   "dependencies": {

@@ -5,6 +5,8 @@ import {
   getSchemaForIntent,
   schemaHintForIntent,
 } from './schemas.ts'
+import { INTERVIEWER_PROMPT } from './prompts/interviewer.ts'
+import { DIAGNOSTICIAN_PROMPT } from './prompts/diagnostician.ts'
 
 // Global provided by the Supabase/Deno-Deploy edge runtime for background
 // work that must survive after the Response is returned. The isolate can be
@@ -201,7 +203,7 @@ Deno.serve(async (req) => {
       })),
     }
 
-    const systemPrompt = await loadPrompt(intent)
+    const systemPrompt = loadPrompt(intent)
     const schema = getSchemaForIntent(intent)!
     const hint = schemaHintForIntent(intent)
 
@@ -346,11 +348,11 @@ Deno.serve(async (req) => {
   }
 })
 
-async function loadPrompt(intent: string): Promise<string> {
-  if (intent === 'interviewer') {
-    return await Deno.readTextFile(new URL('./prompts/interviewer.md', import.meta.url))
-  }
-  return await Deno.readTextFile(new URL('./prompts/diagnostician.md', import.meta.url))
+// Prompts are inlined as generated TS modules (see scripts/sync-prompts.mjs)
+// because the deploy bundler can't trace runtime Deno.readTextFile calls, so
+// sidecar .md files never make it into the deployed function.
+function loadPrompt(intent: string): string {
+  return intent === 'interviewer' ? INTERVIEWER_PROMPT : DIAGNOSTICIAN_PROMPT
 }
 
 // ---------------------------------------------------------------------------
