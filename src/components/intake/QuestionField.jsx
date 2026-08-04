@@ -106,7 +106,7 @@ export default function QuestionField({ question, value, onChange }) {
       <div>
         <p className="mb-3 text-sm text-text-dim">{ui.prompt}</p>
         {ui.kind === 'audio' && <AudioRecorder onCapture={(blob) => onChange(blob)} />}
-        {ui.kind === 'photo' && <PhotoUpload onCapture={(files) => onChange(files?.[0] ?? null)} single />}
+        {ui.kind === 'photo' && <PhotoUpload onCapture={(file) => onChange(file ?? null)} single />}
         {ui.kind === 'video' && (
           <p className="text-sm text-text-dim">Use your device camera from the intake capture step.</p>
         )}
