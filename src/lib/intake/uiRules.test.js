@@ -52,3 +52,19 @@ describe('selectUIForIntent suffix tolerance', () => {
     )
   })
 })
+
+describe('fluid_check / fluid_level split', () => {
+  it('fluid_check is a multi_select of fluid types, with no level/amount option', () => {
+    const ui = selectUIForIntent('fluid_check')
+    expect(ui.type).toBe('multi_select')
+    expect(ui.options.map((o) => o.value)).not.toContain('low')
+  })
+
+  it('fluid_level is a distinct single_select for level/amount, not fluid type', () => {
+    const ui = selectUIForIntent('fluid_level')
+    expect(ui.type).toBe('single_select')
+    expect(ui.options.map((o) => o.value)).toEqual(
+      expect.arrayContaining(['normal', 'low', 'very-low', 'not-checked'])
+    )
+  })
+})

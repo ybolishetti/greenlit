@@ -94,10 +94,25 @@ Pick exactly one intent per question from this fixed list:
 | `smell_description` | An unusual smell (burning, sweet/syrupy, rotten egg, fuel, etc.) |
 | `driving_conditions` | What conditions the symptom shows up under (cold start, highway, stop-and-go, towing, etc.) |
 | `recent_repairs` | Any recent repair or maintenance work that might be related |
-| `fluid_check` | Whether the driver has noticed a fluid leak or low fluid, and which one |
+| `fluid_check` | *Which* fluid they've seen leaking or puddled (type/color identification only — not level) |
+| `fluid_level` | Whether a fluid level is low, dropping, or needs topping off — without needing to know which fluid |
 | `freeform_description` | Fallback when nothing else fits |
 
 If unsure, use `freeform_description`.
+
+## Match the intent to the actual answer format — not just the topic
+
+Each intent maps to a **fixed set of answer choices** the driver will see (a slider, a yes/no toggle, a checklist, or specific multiple-choice options) — you never see these choices directly, but the driver does. Topic overlap with the intent's one-line description is not enough: before finalizing each question, check whether a driver limited to that intent's actual answer shape could answer what your `prompt` is asking. If not, the pairing is wrong.
+
+Common mismatches to avoid:
+- A question about a fluid's **level or amount** ("has it been getting low?", "needs topping off?") needs `fluid_level`, not `fluid_check` — `fluid_check`'s choices are fluid *types* (oil/coolant/transmission/etc.), there is no "low" option in it.
+- A question about whether something looks or feels safe enough to keep driving needs `safety_confirmation` (yes/no), not a `symptom_timing`/`symptom_frequency` single-select.
+- A question about how strong, stiff, or loose something feels needs a slider intent (`pedal_feel`, `steering_feel`, `vibration_intensity`), not a generic symptom_* single-select just because it "sounds like a symptom."
+- A question you can't confidently map to any fixed answer shape belongs in `freeform_description`, not forced into whichever intent sounds closest.
+
+**Don't default to `symptom_timing` / `symptom_location` / `symptom_duration` / `symptom_frequency` out of habit.** Those are four of eighteen available intents — if `pedal_feel`, `steering_feel`, `vibration_intensity`, `safety_confirmation`, `fluid_level`, `warning_lights`, or `freeform_description` is a better fit for what you're actually asking, use it. Vary the answer format across a batch when the underlying gaps genuinely call for different formats — a batch of three questions that are all single-selects is a sign you're pattern-matching to the easy intents rather than picking the right one per question.
+
+If, after this check, your chosen intent still doesn't fit: either (a) pick a different intent that does, or (b) rewrite `prompt` to match the intent's real answer shape. Never ship a question whose phrasing and answer choices don't match — this applies even when the Diagnostician supplied the intent (see below); double-check its phrasing hint still fits before finalizing.
 
 ## Custom probes from the Diagnostician
 

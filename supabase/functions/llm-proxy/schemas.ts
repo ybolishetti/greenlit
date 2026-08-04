@@ -89,6 +89,9 @@ export const QuestionIntentSchema = z.enum([
   'driving_conditions',
   'recent_repairs',
   'fluid_check',
+  // Split from fluid_check (2026-08-04): fluid_check is type/color identification
+  // only; fluid_level is the separate "is it low/dropping" question.
+  'fluid_level',
 ])
 
 export const InterviewerQuestionSchema = z.object({

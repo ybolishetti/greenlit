@@ -23,6 +23,9 @@ export const QUESTION_INTENTS = [
   'driving_conditions',
   'recent_repairs',
   'fluid_check',
+  // Split from fluid_check (2026-08-04): fluid_check is type/color identification
+  // only; fluid_level is the separate "is it low/dropping" question.
+  'fluid_level',
 ]
 
 const TIMING_OPTIONS = [
@@ -114,6 +117,13 @@ const FLUID_CHECK_OPTIONS = [
   { value: 'none', label: "No leaks / haven't noticed" },
 ]
 
+const FLUID_LEVEL_OPTIONS = [
+  { value: 'normal', label: "Normal — hasn't needed topping off" },
+  { value: 'low', label: 'Low — needs topping off more than usual' },
+  { value: 'very-low', label: 'Very low or empty' },
+  { value: 'not-checked', label: "Haven't checked" },
+]
+
 const INTENT_UI_MAP = {
   symptom_timing: {
     type: 'single_select',
@@ -202,6 +212,10 @@ const INTENT_UI_MAP = {
     type: 'multi_select',
     options: FLUID_CHECK_OPTIONS,
     mutexValue: 'none',
+  },
+  fluid_level: {
+    type: 'single_select',
+    options: FLUID_LEVEL_OPTIONS,
   },
   freeform_description: {
     type: 'natural_language',
