@@ -446,7 +446,6 @@ async function callLlm(
         max_tokens: ANTHROPIC_MAX_TOKENS,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }],
-        temperature: 0.4,
       }),
     })
 
@@ -831,7 +830,6 @@ function streamDiagnosticianFinal(
                 max_tokens: ANTHROPIC_MAX_TOKENS,
                 system: systemPrompt,
                 messages: [{ role: 'user', content: initialUserContent }],
-                temperature: 0.4,
                 stream: true,
               }
             : {
