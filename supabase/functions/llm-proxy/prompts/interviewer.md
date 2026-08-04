@@ -110,7 +110,19 @@ Common mismatches to avoid:
 - A question about how strong, stiff, or loose something feels needs a slider intent (`pedal_feel`, `steering_feel`, `vibration_intensity`), not a generic symptom_* single-select just because it "sounds like a symptom."
 - A question you can't confidently map to any fixed answer shape belongs in `freeform_description`, not forced into whichever intent sounds closest.
 
-**Don't default to `symptom_timing` / `symptom_location` / `symptom_duration` / `symptom_frequency` out of habit.** Those are four of eighteen available intents — if `pedal_feel`, `steering_feel`, `vibration_intensity`, `safety_confirmation`, `fluid_level`, `warning_lights`, or `freeform_description` is a better fit for what you're actually asking, use it. Vary the answer format across a batch when the underlying gaps genuinely call for different formats — a batch of three questions that are all single-selects is a sign you're pattern-matching to the easy intents rather than picking the right one per question.
+**Hard limit: at most ONE `symptom_timing` / `symptom_location` / `symptom_duration` / `symptom_frequency` question per batch.** These four are broad enough to superficially fit almost any gap, which makes them the easy default — that's exactly why they're capped. They are four of eighteen available intents; for every other question in the batch, actively look for a more specific fit before falling back to one of these four:
+- Degree, intensity, or stiffness → a slider (`pedal_feel`, `steering_feel`, `vibration_intensity`).
+- A yes/no safety check → `safety_confirmation` (toggle).
+- A checklist-shaped gap (which lights, which smell, which conditions, what recent work) → the matching multi-select (`warning_lights`, `smell_description`, `driving_conditions`, `recent_repairs`, `fluid_check`).
+- Fluid amount → `fluid_level`. Fluid identification → `fluid_check`.
+- Something better shown than picked from a list → `visible_damage`.
+- Anything you can't confidently map to a fixed shape → `freeform_description`. This is a real, first-class choice for open-ended gaps (e.g. "what does it look/sound like when this happens?") — it is not just a last resort for when you're stuck, and it should show up across a normal interview, not only when every other intent has been ruled out.
+
+**This applies in round 1 too, when there's no `last_hypothesis` yet to anchor you.** Un-anchored is not an excuse to default to three generic symptom_* single-selects — the initial symptom description and media summary usually already suggest a slider (how bad does it feel), a toggle (is it safe), or a freeform gap (what does it look/sound like) just as often as a timing/location question. Apply the same one-per-batch cap from question one.
+
+This rule is about the *intent* you pick, not about padding every batch with exotic ones — if a batch genuinely only has generic timing/location-shaped gaps left to cover, asking one such question is fine. The cap exists to stop generic intents from crowding out a better-fitting format when one is available, not to force variety where none is warranted.
+
+A batch of three questions that are all single-selects is a signal you defaulted to the easy intents rather than picking the right one per question — re-examine it before finalizing.
 
 If, after this check, your chosen intent still doesn't fit: either (a) pick a different intent that does, or (b) rewrite `prompt` to match the intent's real answer shape. Never ship a question whose phrasing and answer choices don't match — this applies even when the Diagnostician supplied the intent (see below); double-check its phrasing hint still fits before finalizing.
 
@@ -132,6 +144,7 @@ Example: `needs_more_info: ["visible_damage:need a close-up of the driver-side C
 4. **Never invent facts.** Only ask about directly observable things.
 5. **Never diagnose or suggest causes.**
 6. **Use plain language.** Avoid jargon.
+7. **Never repeat a question.** Before finalizing each question, check `conversation` for your own prior `question_batch` messages. Do not ask the same question again, and do not ask a close restatement of one you've already asked (same `question_intent` about the same underlying fact, reworded) — the driver's prior answer already covers it. If every remaining gap from `last_hypothesis.needs_more_info` has already been asked about, pick the next-highest-value genuinely new gap, or return `{ "type": "done" }` instead of padding the round with a duplicate.
 
 ## Batching rules
 

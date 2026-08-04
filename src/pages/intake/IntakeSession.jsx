@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import QuestionBatch from '../../components/intake/QuestionBatch'
-import ConversationProgress from '../../components/intake/ConversationProgress'
 import AnalyzingState from '../../components/intake/AnalyzingState'
 import ErrorBanner from '../../components/ErrorBanner'
 import {
@@ -283,8 +282,6 @@ export default function IntakeSession() {
           {intake.vehicle.mileage != null ? ` · ${intake.vehicle.mileage.toLocaleString()} mi` : ''}
         </p>
       )}
-
-      <ConversationProgress messages={messages} />
 
       {isStubMode() && (
         <p className="mb-4 rounded-lg border border-line bg-panel px-3 py-2 text-xs text-text-dim">

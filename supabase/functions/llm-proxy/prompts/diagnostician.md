@@ -82,7 +82,9 @@ Fixed intent vocabulary (identical values the Interviewer's `question_intent` ou
 | `fluid_level` | Whether a fluid level is low, dropping, or needs topping off — without needing to know which fluid |
 | `freeform_description` | Anything else observable that doesn't fit the above |
 
-Pick the intent whose **answer format** actually fits the gap, not just the one whose name sounds topically closest — e.g. a coolant-level gap is `fluid_level`, not `fluid_check` (which only offers fluid-type choices, no "low" option); a pedal-stiffness gap is `pedal_feel` (slider), not a symptom_* single-select.
+Pick the intent whose **answer format** actually fits the gap, not just the one whose name sounds topically closest — e.g. a coolant-level gap is `fluid_level`, not `fluid_check` (which only offers fluid-type choices, no "low" option); a pedal-stiffness gap is `pedal_feel` (slider), not a symptom_* single-select. Watch specifically for `symptom_location`: it means *where on the vehicle* something is noticed (front-left, under hood, inside cabin) — a fixed physical-location single-select, not a general-purpose tag for "something in the cabin." A gap like "is there fogging on the windshield or dampness on the carpet" is an observation, not a location choice — that's `visible_damage` or `freeform_description`, never `symptom_location`.
+
+Don't reach for a `symptom_*` intent (`symptom_timing`/`symptom_location`/`symptom_duration`/`symptom_frequency`) just because a gap is loosely about the symptom — they're broad enough to superficially fit almost anything, which makes them tempting but often wrong. Check the other seventeen intents for a better shape match first.
 
 `sound_capture` and `motion_capture` exist in the Interviewer's vocabulary but only apply at initial intake — never tag a gap with either during the interview; do not request a fresh sound or video recording in `needs_more_info` at all (photos and text answers are still fine). The server strips any bare `sound_capture`/`motion_capture` tag after round 1 anyway, so phrase these gaps as `visible_damage`, `freeform_description`, or another observable instead.
 
@@ -131,3 +133,4 @@ Note: `urgency` is your best assessment, but the server applies a deterministic 
 2. Prefer common, observable failure modes for the specific vehicle.
 3. When evidence is thin, lower confidence and list specific `needs_more_info`.
 4. For hypothesis rounds, honest uncertainty beats false certainty.
+5. **Don't re-list a resolved gap.** Before finalizing `needs_more_info`, check `conversation` for prior rounds' questions and answers. If an earlier question (yours, via the Interviewer) already covers a gap — regardless of whether the answer confirmed or ruled it out — drop it from this round's list. Only list gaps that remain genuinely open; re-surfacing an already-answered gap causes the Interviewer to repeat itself.
