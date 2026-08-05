@@ -26,6 +26,11 @@ export const QUESTION_INTENTS = [
   // Split from fluid_check (2026-08-04): fluid_check is type/color identification
   // only; fluid_level is the separate "is it low/dropping" question.
   'fluid_level',
+  // Added 2026-08-04: closes a real coverage gap — "how strong/faint is this
+  // smell/sound/symptom" had no slider intent to land on, so the model was
+  // reaching for a checklist intent (e.g. smell_description) whose fixed
+  // options describe *type*, not *intensity*, producing prompt/answer mismatches.
+  'symptom_intensity',
 ]
 
 const TIMING_OPTIONS = [
@@ -221,6 +226,14 @@ const INTENT_UI_MAP = {
     type: 'natural_language',
     placeholder: 'Describe what you notice in your own words…',
   },
+  symptom_intensity: {
+    type: 'slider',
+    min: 0,
+    max: 10,
+    step: 1,
+    lowLabel: 'Faint / barely noticeable',
+    highLabel: 'Very strong',
+  },
 }
 
 /**
@@ -260,6 +273,56 @@ export function parseIntent(rawIntent) {
   return { intent: base, customProbe: probe.length ? probe : null }
 }
 
+// Defense-in-depth for the Interviewer's own intent/prompt-matching rule
+// (see interviewer.md "Match the intent to the actual answer format"): the
+// model is instructed to self-check this, but nothing enforces it, so a
+// mistagged question ships with a fixed answer set that doesn't fit what
+// `prompt` actually asks (e.g. a timing question wired to a smell-type
+// checklist). These patterns catch the two clearest, most common failure
+// shapes and remap the intent before UI selection — intentionally narrow so
+// it only overrides a genuinely wrong pairing, never a plausible one.
+const TIMING_SIGNAL = /\bwhen (do|does|did) you\b|\bas soon as\b|\bhow soon\b|\btakes? (a )?(minute|couple|while) to\b|\bright away\b|\bimmediately or\b/i
+const INTENSITY_SIGNAL = /\bhow (strong|intense|severe|faint)\b|\bfaint\b(?!.*smell like)|\bbarely noticeable\b|\bvery strong\b|\bmild(,| or)? moderate\b/i
+
+// Intents whose fixed answer set is a closed checklist/scale unrelated to
+// *when* something happens — a strong timing-phrased prompt on one of these
+// is a mismatch, not a valid choice.
+const NOT_TIMING_SHAPED = new Set([
+  'smell_description',
+  'warning_lights',
+  'driving_conditions',
+  'recent_repairs',
+  'fluid_check',
+  'fluid_level',
+  'vibration_location',
+  'safety_confirmation',
+  'pedal_feel',
+  'steering_feel',
+  'vibration_intensity',
+  'visible_damage',
+  'sound_capture',
+  'motion_capture',
+  'symptom_location',
+])
+
+// Checklist-type intents describe *category/type*, not *degree* — an
+// intensity-phrased prompt on one of these means the model reached for the
+// nearest topical checklist instead of the (previously nonexistent, now
+// available) intensity slider.
+const CHECKLIST_SHAPED = new Set(['smell_description', 'warning_lights', 'driving_conditions', 'recent_repairs', 'fluid_check'])
+
+/**
+ * @param {string} prompt
+ * @param {string} intent
+ * @returns {string}
+ */
+export function crossCheckIntent(prompt, intent) {
+  if (typeof prompt !== 'string' || !prompt) return intent
+  if (TIMING_SIGNAL.test(prompt) && NOT_TIMING_SHAPED.has(intent)) return 'symptom_timing'
+  if (INTENSITY_SIGNAL.test(prompt) && CHECKLIST_SHAPED.has(intent)) return 'symptom_intensity'
+  return intent
+}
+
 /**
  * @param {string} intent
  * @returns {import('../ai/schemas.js').UISchema extends infer T ? T : never}
@@ -278,10 +341,11 @@ export function enrichQuestionWithUI(question) {
   if (question.ui) return question
   const { intent } = parseIntent(question.question_intent ?? 'freeform_description')
   const normalized = QUESTION_INTENTS.includes(intent) ? intent : 'freeform_description'
+  const checked = crossCheckIntent(question.prompt, normalized)
   return {
     ...question,
-    question_intent: normalized,
-    ui: selectUIForIntent(normalized),
+    question_intent: checked,
+    ui: selectUIForIntent(checked),
   }
 }
 

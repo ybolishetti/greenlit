@@ -27,6 +27,16 @@ const COST_CAP_USD = 0.45
 const LOW_CONFIDENCE_THRESHOLD = 0.6
 const PER_CAUSE_CLAMP = 55
 const ANTHROPIC_MAX_TOKENS = 4096
+// Anthropic defaults to temperature 1.0 when unset — highest-variance
+// sampling. These intents need run-to-run consistency (same intake answers
+// should not swing between "immediate, $100-600" and "monitor, $600-1250"),
+// so we pin it explicitly instead of relying on the API default.
+const DIAGNOSTICIAN_TEMPERATURE = 0.2
+const INTERVIEWER_TEMPERATURE = 0.3
+
+function temperatureForIntent(intent: Intent): number {
+  return intent === 'interviewer' ? INTERVIEWER_TEMPERATURE : DIAGNOSTICIAN_TEMPERATURE
+}
 
 type Intent =
   | 'interviewer'
@@ -223,7 +233,8 @@ Deno.serve(async (req) => {
       )
     }
 
-    let call = await callLlm(provider, apiUrl, apiKey, model, systemPrompt, llmPayload)
+    const temperature = temperatureForIntent(intent)
+    let call = await callLlm(provider, apiUrl, apiKey, model, systemPrompt, llmPayload, temperature)
     let result = schema.safeParse(call.parsed)
 
     if (!result.success) {
@@ -234,6 +245,7 @@ Deno.serve(async (req) => {
         model,
         systemPrompt,
         llmPayload,
+        temperature,
         `Your response failed validation: ${formatZodError(result.error)}. Reply with valid JSON matching this schema: ${hint}`
       )
       result = schema.safeParse(call.parsed)
@@ -420,6 +432,7 @@ async function callLlm(
   model: string,
   systemPrompt: string,
   userPayload: unknown,
+  temperature: number,
   retryNote?: string
 ): Promise<LlmCallResult> {
   const userContent = retryNote
@@ -446,6 +459,7 @@ async function callLlm(
         max_tokens: ANTHROPIC_MAX_TOKENS,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }],
+        temperature,
       }),
     })
 
@@ -481,7 +495,7 @@ async function callLlm(
       model,
       response_format: { type: 'json_object' },
       messages: requestMessages,
-      temperature: 0.4,
+      temperature,
     }),
   })
 
@@ -830,6 +844,7 @@ function streamDiagnosticianFinal(
                 max_tokens: ANTHROPIC_MAX_TOKENS,
                 system: systemPrompt,
                 messages: [{ role: 'user', content: initialUserContent }],
+                temperature: DIAGNOSTICIAN_TEMPERATURE,
                 stream: true,
               }
             : {
@@ -837,7 +852,7 @@ function streamDiagnosticianFinal(
                 stream: true,
                 response_format: { type: 'json_object' },
                 messages: initialRequestMessages,
-                temperature: 0.4,
+                temperature: DIAGNOSTICIAN_TEMPERATURE,
               }
 
         const headers =
@@ -947,6 +962,7 @@ function streamDiagnosticianFinal(
             model,
             systemPrompt,
             userPayload,
+            DIAGNOSTICIAN_TEMPERATURE,
             `Your response failed validation: ${formatZodError(result.error)}. Reply with valid JSON matching this schema: ${hint}`
           )
           parsed = retryCall.parsed

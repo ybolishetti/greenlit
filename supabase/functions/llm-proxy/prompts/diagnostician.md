@@ -70,7 +70,8 @@ Fixed intent vocabulary (identical values the Interviewer's `question_intent` ou
 | `symptom_frequency` | How often (always, sometimes, only when X) |
 | `pedal_feel` | Brake pedal feel (loose vs stiff) |
 | `steering_feel` | Steering effort (easy vs resistant) |
-| `vibration_intensity` | How strong a vibration is |
+| `vibration_intensity` | How strong a vibration specifically is |
+| `symptom_intensity` | How strong/faint a non-vibration symptom is (smell, sound, light flicker, etc.) — degree, not type |
 | `vibration_location` | Where a vibration is felt |
 | `warning_lights` | Dashboard warning lights |
 | `visible_damage` | Visible damage, leaks, or wear (photo helps) |
@@ -84,7 +85,7 @@ Fixed intent vocabulary (identical values the Interviewer's `question_intent` ou
 
 Pick the intent whose **answer format** actually fits the gap, not just the one whose name sounds topically closest — e.g. a coolant-level gap is `fluid_level`, not `fluid_check` (which only offers fluid-type choices, no "low" option); a pedal-stiffness gap is `pedal_feel` (slider), not a symptom_* single-select. Watch specifically for `symptom_location`: it means *where on the vehicle* something is noticed (front-left, under hood, inside cabin) — a fixed physical-location single-select, not a general-purpose tag for "something in the cabin." A gap like "is there fogging on the windshield or dampness on the carpet" is an observation, not a location choice — that's `visible_damage` or `freeform_description`, never `symptom_location`.
 
-Don't reach for a `symptom_*` intent (`symptom_timing`/`symptom_location`/`symptom_duration`/`symptom_frequency`) just because a gap is loosely about the symptom — they're broad enough to superficially fit almost anything, which makes them tempting but often wrong. Check the other seventeen intents for a better shape match first.
+Don't reach for a `symptom_*` intent (`symptom_timing`/`symptom_location`/`symptom_duration`/`symptom_frequency`) just because a gap is loosely about the symptom — they're broad enough to superficially fit almost anything, which makes them tempting but often wrong. Check the other eighteen intents for a better shape match first. In particular, a gap about how strong or faint a smell/sound/other non-vibration symptom is needs `symptom_intensity` (a slider), not `smell_description` or another checklist intent — those only offer type/category choices, not a degree.
 
 `sound_capture` and `motion_capture` exist in the Interviewer's vocabulary but only apply at initial intake — never tag a gap with either during the interview; do not request a fresh sound or video recording in `needs_more_info` at all (photos and text answers are still fine). The server strips any bare `sound_capture`/`motion_capture` tag after round 1 anyway, so phrase these gaps as `visible_damage`, `freeform_description`, or another observable instead.
 

@@ -92,6 +92,9 @@ export const QuestionIntentSchema = z.enum([
   // Split from fluid_check (2026-08-04): fluid_check is type/color identification
   // only; fluid_level is the separate "is it low/dropping" question.
   'fluid_level',
+  // Added 2026-08-04: generic "how strong/faint" slider, distinct from the
+  // domain-specific pedal_feel/steering_feel/vibration_intensity sliders.
+  'symptom_intensity',
 ])
 
 export const InterviewerQuestionSchema = z.object({

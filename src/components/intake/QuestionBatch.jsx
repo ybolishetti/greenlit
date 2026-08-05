@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowRight } from 'lucide-react'
+import { ArrowLeft, ArrowRight } from 'lucide-react'
 import QuestionField from './QuestionField'
 
 export default function QuestionBatch({ batch, onSubmit, submitting }) {
@@ -19,6 +19,10 @@ export default function QuestionBatch({ batch, onSubmit, submitting }) {
     if (current.ui.type === 'natural_language') return typeof val === 'string' && val.trim().length > 0
     if (current.ui.type === 'media_request') return val != null
     return val != null && val !== ''
+  }
+
+  const back = () => {
+    if (step > 0) setStep((s) => s - 1)
   }
 
   const next = () => {
@@ -50,7 +54,16 @@ export default function QuestionBatch({ batch, onSubmit, submitting }) {
           onChange={(v) => setAnswer(current.id, v)}
         />
       </div>
-      <div className="mt-6 flex justify-end">
+      <div className="mt-6 flex items-center justify-between">
+        <button
+          type="button"
+          disabled={step === 0 || submitting}
+          onClick={back}
+          className="inline-flex items-center gap-2 rounded-xl border border-line bg-panel px-5 py-2.5 text-sm font-semibold text-text hover:border-brand/50 disabled:opacity-0"
+        >
+          <ArrowLeft size={15} />
+          Back
+        </button>
         <button
           type="button"
           disabled={!canAdvance() || submitting}

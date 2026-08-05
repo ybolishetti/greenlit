@@ -84,7 +84,8 @@ Pick exactly one intent per question from this fixed list:
 | `symptom_frequency` | How often (always, sometimes, only when X) |
 | `pedal_feel` | Brake pedal feel (loose vs stiff) |
 | `steering_feel` | Steering effort (easy vs resistant) |
-| `vibration_intensity` | How strong a vibration is |
+| `vibration_intensity` | How strong a vibration specifically feels |
+| `symptom_intensity` | How strong/faint a non-vibration symptom is (smell, sound, light flicker, etc.) — degree, not type |
 | `vibration_location` | Where vibration is felt |
 | `warning_lights` | Dashboard warning lights |
 | `visible_damage` | Visible damage, leaks, or wear (photo helps) |
@@ -107,13 +108,14 @@ Each intent maps to a **fixed set of answer choices** the driver will see (a sli
 Common mismatches to avoid:
 - A question about a fluid's **level or amount** ("has it been getting low?", "needs topping off?") needs `fluid_level`, not `fluid_check` — `fluid_check`'s choices are fluid *types* (oil/coolant/transmission/etc.), there is no "low" option in it.
 - A question about whether something looks or feels safe enough to keep driving needs `safety_confirmation` (yes/no), not a `symptom_timing`/`symptom_frequency` single-select.
-- A question about how strong, stiff, or loose something feels needs a slider intent (`pedal_feel`, `steering_feel`, `vibration_intensity`), not a generic symptom_* single-select just because it "sounds like a symptom."
+- A question about how strong, stiff, or loose something feels needs a slider intent (`pedal_feel`, `steering_feel`, `vibration_intensity`, `symptom_intensity`), not a generic symptom_* single-select just because it "sounds like a symptom."
+- A question about how strong or faint a **smell, sound, or other non-vibration symptom** is needs `symptom_intensity` (a slider), not the topic's checklist intent (`smell_description`'s options are smell *types* — burning rubber, sweet/syrupy, etc. — with no faint/moderate/strong option among them).
 - A question you can't confidently map to any fixed answer shape belongs in `freeform_description`, not forced into whichever intent sounds closest.
 
 **There is no fixed quota on any intent, including the generic symptom_* ones.** `symptom_timing` / `symptom_location` / `symptom_duration` / `symptom_frequency` are correct and required whenever a gap is genuinely about when/where/since-when/how-often — if a round has two or three gaps that each genuinely need one of these, ask all of them that way. Never force a slider, toggle, or freeform question onto a gap that actually needs a plain when/where/how-often answer just to "add variety" — a wrong-but-diverse intent is the same bug as a wrong-but-repetitive one. Correctness of the pairing always comes first.
 
 What to actually watch for is *laziness*, not *count*: these four intents are broad enough to superficially fit almost any gap, which makes them tempting to reach for by default before checking whether something more specific fits better. For each question, independently check the full list before settling on one of the four generic intents:
-- Degree, intensity, or stiffness → a slider (`pedal_feel`, `steering_feel`, `vibration_intensity`).
+- Degree, intensity, or stiffness → a slider (`pedal_feel`, `steering_feel`, `vibration_intensity` for vibration specifically, `symptom_intensity` for everything else — smell, sound, light flicker, etc.).
 - A yes/no safety check → `safety_confirmation` (toggle).
 - A checklist-shaped gap (which lights, which smell, which conditions, what recent work) → the matching multi-select (`warning_lights`, `smell_description`, `driving_conditions`, `recent_repairs`, `fluid_check`).
 - Fluid amount → `fluid_level`. Fluid identification → `fluid_check`.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseIntent, selectUIForIntent } from './uiRules.js'
+import { crossCheckIntent, enrichQuestionWithUI, parseIntent, selectUIForIntent } from './uiRules.js'
 
 describe('parseIntent', () => {
   it('returns the bare intent with no customProbe when there is no colon', () => {
@@ -66,5 +66,54 @@ describe('fluid_check / fluid_level split', () => {
     expect(ui.options.map((o) => o.value)).toEqual(
       expect.arrayContaining(['normal', 'low', 'very-low', 'not-checked'])
     )
+  })
+})
+
+describe('symptom_intensity', () => {
+  it('is a slider, distinct from the type-based smell_description checklist', () => {
+    const ui = selectUIForIntent('symptom_intensity')
+    expect(ui.type).toBe('slider')
+    expect(ui.lowLabel).toMatch(/faint/i)
+    expect(ui.highLabel).toMatch(/strong/i)
+  })
+})
+
+describe('crossCheckIntent', () => {
+  it('remaps a timing-phrased prompt wrongly tagged with a checklist intent to symptom_timing', () => {
+    expect(
+      crossCheckIntent(
+        'When do you first notice the sweet smell — as soon as you turn on the heat, or does it take a minute or two to appear?',
+        'smell_description'
+      )
+    ).toBe('symptom_timing')
+  })
+
+  it('remaps an intensity-phrased prompt wrongly tagged with the smell checklist to symptom_intensity', () => {
+    expect(
+      crossCheckIntent('How strong is the sweet smell — faint and barely noticeable, moderate, or very strong?', 'smell_description')
+    ).toBe('symptom_intensity')
+  })
+
+  it('leaves a correctly-tagged smell-type question alone', () => {
+    expect(crossCheckIntent('What does the smell coming from the vents smell like?', 'smell_description')).toBe(
+      'smell_description'
+    )
+  })
+
+  it('leaves already-plausible intents alone even if they mention "when"', () => {
+    expect(crossCheckIntent('Since when have you noticed this?', 'symptom_duration')).toBe('symptom_duration')
+  })
+})
+
+describe('enrichQuestionWithUI cross-check integration', () => {
+  it('corrects the intent and attaches the matching UI when prompt and intent disagree', () => {
+    const enriched = enrichQuestionWithUI({
+      id: 'q1',
+      prompt: 'How strong is the sweet smell — faint, moderate, or very strong?',
+      question_intent: 'smell_description',
+      rationale: 'test',
+    })
+    expect(enriched.question_intent).toBe('symptom_intensity')
+    expect(enriched.ui.type).toBe('slider')
   })
 })
