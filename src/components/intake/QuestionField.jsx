@@ -14,7 +14,10 @@ export default function QuestionField({ question, value, onChange }) {
             key={opt.value}
             label={opt.label}
             selected={value === opt.value}
-            onClick={() => onChange(opt.value)}
+            // Tap the selected option again to clear it — otherwise a single
+            // pick can only be switched, never deselected. null reads as
+            // "unanswered" to canAdvance, same as the initial state.
+            onClick={() => onChange(value === opt.value ? null : opt.value)}
           />
         ))}
       </div>
