@@ -27,10 +27,11 @@ const COST_CAP_USD = 0.45
 const LOW_CONFIDENCE_THRESHOLD = 0.6
 const PER_CAUSE_CLAMP = 55
 const ANTHROPIC_MAX_TOKENS = 4096
-// Anthropic defaults to temperature 1.0 when unset — highest-variance
-// sampling. These intents need run-to-run consistency (same intake answers
-// should not swing between "immediate, $100-600" and "monitor, $600-1250"),
-// so we pin it explicitly instead of relying on the API default.
+// `temperature` is deprecated/rejected by claude-sonnet-5 — sending it at all
+// causes a 400 (confirmed in production, see d0dc7f1). Do NOT add it back to
+// the Anthropic request body. These constants only apply to the OpenAI
+// rollback path below, which still accepts and needs it for its own
+// run-to-run consistency.
 const DIAGNOSTICIAN_TEMPERATURE = 0.2
 const INTERVIEWER_TEMPERATURE = 0.3
 
@@ -459,7 +460,6 @@ async function callLlm(
         max_tokens: ANTHROPIC_MAX_TOKENS,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }],
-        temperature,
       }),
     })
 
@@ -844,7 +844,6 @@ function streamDiagnosticianFinal(
                 max_tokens: ANTHROPIC_MAX_TOKENS,
                 system: systemPrompt,
                 messages: [{ role: 'user', content: initialUserContent }],
-                temperature: DIAGNOSTICIAN_TEMPERATURE,
                 stream: true,
               }
             : {
