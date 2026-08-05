@@ -151,8 +151,11 @@ const INTENT_UI_MAP = {
     options: ONSET_DELAY_OPTIONS,
   },
   symptom_location: {
-    type: 'single_select',
+    // multi_select: a symptom (sound, leak, etc.) can genuinely come from more
+    // than one place. "not-sure" is mutually exclusive with real locations.
+    type: 'multi_select',
     options: LOCATION_OPTIONS,
+    mutexValue: 'not-sure',
   },
   symptom_duration: {
     type: 'single_select',
@@ -187,7 +190,9 @@ const INTENT_UI_MAP = {
     highLabel: 'Severe',
   },
   vibration_location: {
-    type: 'single_select',
+    // multi_select: vibration is often felt in several places at once (e.g.
+    // steering wheel + seat). No natural "none" option, so no mutexValue.
+    type: 'multi_select',
     options: VIBRATION_LOCATION_OPTIONS,
   },
   warning_lights: {

@@ -80,14 +80,14 @@ Pick exactly one intent per question from this fixed list:
 |--------|------------------------|
 | `symptom_timing` | *Which driving maneuver/condition* triggers it (cold start, highway, braking, turning, etc.) — not whether it's immediate or delayed |
 | `symptom_onset_delay` | Whether it appears *immediately* or only after some delay/warm-up (e.g. "right when you turn the heat on" vs "only after driving a while") — a different axis from `symptom_timing`, not answerable by its options |
-| `symptom_location` | Where they notice it (front-left, rear, under hood, etc.) |
+| `symptom_location` | Where they notice it (front-left, rear, under hood, etc.) — driver can pick more than one, so phrase it to allow several places |
 | `symptom_duration` | Since when (today, week, month, longer) |
 | `symptom_frequency` | How often (always, sometimes, only when X) |
 | `pedal_feel` | Brake pedal feel (loose vs stiff) |
 | `steering_feel` | Steering effort (easy vs resistant) |
 | `vibration_intensity` | How strong a vibration specifically feels |
 | `symptom_intensity` | How strong/faint a non-vibration symptom is (smell, sound, light flicker, etc.) — degree, not type |
-| `vibration_location` | Where vibration is felt |
+| `vibration_location` | Where vibration is felt — driver can pick more than one, so phrase it to allow several places |
 | `warning_lights` | Dashboard warning lights |
 | `visible_damage` | Visible damage, leaks, or wear (photo helps) |
 | `sound_capture` | A sound that should be recorded |

@@ -78,6 +78,21 @@ describe('symptom_intensity', () => {
   })
 })
 
+describe('location intents are multi_select', () => {
+  it('symptom_location allows multiple picks with not-sure as the mutex option', () => {
+    const ui = selectUIForIntent('symptom_location')
+    expect(ui.type).toBe('multi_select')
+    expect(ui.mutexValue).toBe('not-sure')
+    expect(ui.options.map((o) => o.value)).toContain('not-sure')
+  })
+
+  it('vibration_location allows multiple picks with no mutex option', () => {
+    const ui = selectUIForIntent('vibration_location')
+    expect(ui.type).toBe('multi_select')
+    expect(ui.mutexValue).toBeUndefined()
+  })
+})
+
 describe('symptom_onset_delay', () => {
   it('is a single_select of immediate-vs-delayed options, distinct from symptom_timing\'s driving-maneuver options', () => {
     const ui = selectUIForIntent('symptom_onset_delay')

@@ -1,13 +1,13 @@
 import { useState } from 'react'
-
-const TOP_MAKES = [
-  'Acura', 'Audi', 'BMW', 'Buick', 'Cadillac', 'Chevrolet', 'Chrysler', 'Dodge',
-  'Ford', 'GMC', 'Honda', 'Hyundai', 'Infiniti', 'Jeep', 'Kia', 'Lexus',
-  'Lincoln', 'Mazda', 'Mercedes-Benz', 'Mini', 'Mitsubishi', 'Nissan', 'Ram',
-  'Subaru', 'Tesla', 'Toyota', 'Volkswagen', 'Volvo', 'Other',
-]
+import { ChevronDown } from 'lucide-react'
+import { VEHICLE_MAKES, MAKE_MODELS, OTHER, isKnownMake, isKnownModel } from '../../lib/vehicleData'
 
 const currentYear = new Date().getFullYear()
+
+const selectClass =
+  'mt-1 w-full appearance-none rounded-xl border border-line bg-ink p-3 pr-10 text-sm text-text focus:border-brand/50 focus:outline-none'
+const inputClass =
+  'mt-1 w-full rounded-xl border border-line bg-ink p-3 text-sm text-text focus:border-brand/50 focus:outline-none'
 
 export default function VehicleForm({
   onSubmit,
@@ -17,11 +17,39 @@ export default function VehicleForm({
   submitLabel = 'Continue',
 }) {
   const [year, setYear] = useState(initialValues?.year != null ? String(initialValues.year) : '')
-  const [make, setMake] = useState(initialValues?.make ?? '')
-  const [model, setModel] = useState(initialValues?.model ?? '')
+
+  // A make/model that isn't in our curated lists (e.g. a saved vehicle typed
+  // before dropdowns existed, or an uncommon vehicle) is represented as the
+  // "Other" dropdown selection with the real value held in the free-text field.
+  const initialMake = initialValues?.make ?? ''
+  const initialMakeKnown = isKnownMake(initialMake)
+  const [makeSelect, setMakeSelect] = useState(initialMake ? (initialMakeKnown ? initialMake : OTHER) : '')
+  const [makeOther, setMakeOther] = useState(initialMake && !initialMakeKnown ? initialMake : '')
+
+  const initialModel = initialValues?.model ?? ''
+  const initialModelKnown = isKnownModel(initialMake, initialModel)
+  const [modelSelect, setModelSelect] = useState(initialModel ? (initialModelKnown ? initialModel : OTHER) : '')
+  const [modelOther, setModelOther] = useState(initialModel && !initialModelKnown ? initialModel : '')
+
   const [mileage, setMileage] = useState(initialValues?.mileage != null ? String(initialValues.mileage) : '')
   const [saveToAccount, setSaveToAccount] = useState(true)
   const [error, setError] = useState(null)
+
+  const makeIsOther = makeSelect === OTHER
+  const modelIsOther = modelSelect === OTHER
+  // The model dropdown only has real options for a known make; for "Other"
+  // make we skip straight to a free-text model field.
+  const modelOptions = makeIsOther ? [] : MAKE_MODELS[makeSelect] ?? []
+
+  const resolvedMake = (makeIsOther ? makeOther : makeSelect).trim()
+  const resolvedModel = (makeIsOther || modelIsOther ? modelOther : modelSelect).trim()
+
+  const onMakeChange = (value) => {
+    setMakeSelect(value)
+    // Changing make invalidates any previously chosen model.
+    setModelSelect('')
+    setModelOther('')
+  }
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -32,12 +60,20 @@ export default function VehicleForm({
       setError(`Enter a valid year (1980–${currentYear + 1})`)
       return
     }
-    if (!make.trim()) {
+    if (!makeSelect) {
       setError('Make is required')
       return
     }
-    if (!model.trim()) {
+    if (!resolvedMake) {
+      setError('Enter the make')
+      return
+    }
+    if (!makeIsOther && modelOptions.length > 0 && !modelSelect) {
       setError('Model is required')
+      return
+    }
+    if (!resolvedModel) {
+      setError('Enter the model')
       return
     }
 
@@ -49,8 +85,8 @@ export default function VehicleForm({
 
     onSubmit({
       year: yearNum,
-      make: make.trim(),
-      model: model.trim(),
+      make: resolvedMake,
+      model: resolvedModel,
       mileage: mileageNum,
       trim: null,
       saveToAccount: showSaveToAccount ? saveToAccount : false,
@@ -81,31 +117,83 @@ export default function VehicleForm({
 
         <label className="block">
           <span className="text-xs font-medium uppercase tracking-wide text-text-mute">Make *</span>
-          <input
-            list="vehicle-makes"
-            required
-            value={make}
-            onChange={(e) => setMake(e.target.value)}
-            placeholder="Toyota"
-            className="mt-1 w-full rounded-xl border border-line bg-ink p-3 text-sm focus:border-brand/50 focus:outline-none"
-          />
-          <datalist id="vehicle-makes">
-            {TOP_MAKES.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
+          <div className="relative">
+            <select
+              value={makeSelect}
+              onChange={(e) => onMakeChange(e.target.value)}
+              className={selectClass}
+            >
+              <option value="" disabled>
+                Select make
+              </option>
+              {VEHICLE_MAKES.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+              <option value={OTHER}>Other / not listed</option>
+            </select>
+            <ChevronDown
+              size={16}
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-mute"
+            />
+          </div>
+          {makeIsOther && (
+            <input
+              type="text"
+              value={makeOther}
+              onChange={(e) => setMakeOther(e.target.value)}
+              placeholder="Enter make"
+              className={inputClass}
+            />
+          )}
         </label>
 
         <label className="block sm:col-span-2">
           <span className="text-xs font-medium uppercase tracking-wide text-text-mute">Model *</span>
-          <input
-            type="text"
-            required
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            placeholder="Camry"
-            className="mt-1 w-full rounded-xl border border-line bg-ink p-3 text-sm focus:border-brand/50 focus:outline-none"
-          />
+          {makeIsOther || modelOptions.length === 0 ? (
+            <input
+              type="text"
+              value={modelOther}
+              onChange={(e) => setModelOther(e.target.value)}
+              placeholder="Enter model"
+              disabled={!makeSelect}
+              className={`${inputClass} disabled:opacity-40`}
+            />
+          ) : (
+            <>
+              <div className="relative">
+                <select
+                  value={modelSelect}
+                  onChange={(e) => setModelSelect(e.target.value)}
+                  className={selectClass}
+                >
+                  <option value="" disabled>
+                    Select model
+                  </option>
+                  {modelOptions.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                  <option value={OTHER}>Other / not listed</option>
+                </select>
+                <ChevronDown
+                  size={16}
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-mute"
+                />
+              </div>
+              {modelIsOther && (
+                <input
+                  type="text"
+                  value={modelOther}
+                  onChange={(e) => setModelOther(e.target.value)}
+                  placeholder="Enter model"
+                  className={inputClass}
+                />
+              )}
+            </>
+          )}
         </label>
 
         <label className="block sm:col-span-2">
