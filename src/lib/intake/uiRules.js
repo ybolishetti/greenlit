@@ -31,6 +31,11 @@ export const QUESTION_INTENTS = [
   // reaching for a checklist intent (e.g. smell_description) whose fixed
   // options describe *type*, not *intensity*, producing prompt/answer mismatches.
   'symptom_intensity',
+  // Added 2026-08-04: symptom_timing's fixed options are all "which driving
+  // maneuver" (cold start, braking, turning, ...) — a different question
+  // shape from "does it appear immediately or does it take time/warm-up to
+  // show up", which has no matching option in that list either.
+  'symptom_onset_delay',
 ]
 
 const TIMING_OPTIONS = [
@@ -40,6 +45,13 @@ const TIMING_OPTIONS = [
   { value: 'turning', label: 'Turning' },
   { value: 'accelerating', label: 'Accelerating' },
   { value: 'always', label: 'All the time' },
+]
+
+const ONSET_DELAY_OPTIONS = [
+  { value: 'immediate', label: 'Right away / immediately' },
+  { value: 'brief-delay', label: 'Takes a minute or two to appear' },
+  { value: 'extended-delay', label: 'Only after running or driving for a while' },
+  { value: 'inconsistent', label: 'Comes and goes, no clear pattern' },
 ]
 
 const LOCATION_OPTIONS = [
@@ -133,6 +145,10 @@ const INTENT_UI_MAP = {
   symptom_timing: {
     type: 'single_select',
     options: TIMING_OPTIONS,
+  },
+  symptom_onset_delay: {
+    type: 'single_select',
+    options: ONSET_DELAY_OPTIONS,
   },
   symptom_location: {
     type: 'single_select',
@@ -283,6 +299,14 @@ export function parseIntent(rawIntent) {
 // it only overrides a genuinely wrong pairing, never a plausible one.
 const TIMING_SIGNAL = /\bwhen (do|does|did) you\b|\bas soon as\b|\bhow soon\b|\btakes? (a )?(minute|couple|while) to\b|\bright away\b|\bimmediately or\b/i
 const INTENSITY_SIGNAL = /\bhow (strong|intense|severe|faint)\b|\bfaint\b(?!.*smell like)|\bbarely noticeable\b|\bvery strong\b|\bmild(,| or)? moderate\b/i
+// "When do you notice X most — right when it starts, the whole time, or only
+// after a while?" reads as symptom_timing on the surface (it does start with
+// "when do you"), but TIMING_OPTIONS is entirely "which driving maneuver"
+// (braking, turning, cold start...) — none of which answers an
+// immediate-vs-delayed-onset question. This has to be checked ahead of (and
+// override) TIMING_SIGNAL/symptom_timing, not just the checklist intents.
+const ONSET_DELAY_SIGNAL =
+  /\btakes? (a )?(minute(s)?(\s+or\s+two)?|couple( of minutes)?|few minutes|while) to (appear|show up|start|kick in|show)\b|\bfirst turns? on\b.*\b(all the time|running)\b|\bonly after (the car |it )?(has been |'s been )?(running|driving|warmed? up)\b|\bonce (it'?s|the car'?s) warmed? up\b/i
 
 // Intents whose fixed answer set is a closed checklist/scale unrelated to
 // *when* something happens — a strong timing-phrased prompt on one of these
@@ -318,6 +342,7 @@ const CHECKLIST_SHAPED = new Set(['smell_description', 'warning_lights', 'drivin
  */
 export function crossCheckIntent(prompt, intent) {
   if (typeof prompt !== 'string' || !prompt) return intent
+  if (ONSET_DELAY_SIGNAL.test(prompt)) return 'symptom_onset_delay'
   if (TIMING_SIGNAL.test(prompt) && NOT_TIMING_SHAPED.has(intent)) return 'symptom_timing'
   if (INTENSITY_SIGNAL.test(prompt) && CHECKLIST_SHAPED.has(intent)) return 'symptom_intensity'
   return intent

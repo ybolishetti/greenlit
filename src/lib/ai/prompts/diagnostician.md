@@ -64,7 +64,8 @@ Fixed intent vocabulary (identical values the Interviewer's `question_intent` ou
 
 | Intent | Use when the gap is about… |
 |--------|------------------------|
-| `symptom_timing` | When it happens (cold start, highway, braking, turning, etc.) |
+| `symptom_timing` | *Which driving maneuver/condition* triggers it (cold start, highway, braking, turning, etc.) — not immediate-vs-delayed |
+| `symptom_onset_delay` | Whether it appears immediately or only after a delay/warm-up — a different axis from `symptom_timing` |
 | `symptom_location` | Where it's noticed (front-left, rear, under hood, etc.) |
 | `symptom_duration` | Since when (today, week, month, longer) |
 | `symptom_frequency` | How often (always, sometimes, only when X) |
@@ -85,7 +86,7 @@ Fixed intent vocabulary (identical values the Interviewer's `question_intent` ou
 
 Pick the intent whose **answer format** actually fits the gap, not just the one whose name sounds topically closest — e.g. a coolant-level gap is `fluid_level`, not `fluid_check` (which only offers fluid-type choices, no "low" option); a pedal-stiffness gap is `pedal_feel` (slider), not a symptom_* single-select. Watch specifically for `symptom_location`: it means *where on the vehicle* something is noticed (front-left, under hood, inside cabin) — a fixed physical-location single-select, not a general-purpose tag for "something in the cabin." A gap like "is there fogging on the windshield or dampness on the carpet" is an observation, not a location choice — that's `visible_damage` or `freeform_description`, never `symptom_location`.
 
-Don't reach for a `symptom_*` intent (`symptom_timing`/`symptom_location`/`symptom_duration`/`symptom_frequency`) just because a gap is loosely about the symptom — they're broad enough to superficially fit almost anything, which makes them tempting but often wrong. Check the other eighteen intents for a better shape match first. In particular, a gap about how strong or faint a smell/sound/other non-vibration symptom is needs `symptom_intensity` (a slider), not `smell_description` or another checklist intent — those only offer type/category choices, not a degree.
+Don't reach for a `symptom_*` intent (`symptom_timing`/`symptom_location`/`symptom_duration`/`symptom_frequency`) just because a gap is loosely about the symptom — they're broad enough to superficially fit almost anything, which makes them tempting but often wrong. Check the other nineteen intents for a better shape match first. In particular, a gap about how strong or faint a smell/sound/other non-vibration symptom is needs `symptom_intensity` (a slider), not `smell_description` or another checklist intent — those only offer type/category choices, not a degree. And a gap about whether a symptom shows up immediately or only after a delay/warm-up needs `symptom_onset_delay`, not `symptom_timing` — the latter's options are driving maneuvers, not an immediate-vs-delayed axis.
 
 `sound_capture` and `motion_capture` exist in the Interviewer's vocabulary but only apply at initial intake — never tag a gap with either during the interview; do not request a fresh sound or video recording in `needs_more_info` at all (photos and text answers are still fine). The server strips any bare `sound_capture`/`motion_capture` tag after round 1 anyway, so phrase these gaps as `visible_damage`, `freeform_description`, or another observable instead.
 
@@ -111,11 +112,38 @@ Don't reach for a `symptom_*` intent (`symptom_timing`/`symptom_location`/`sympt
 
 | Key | Label | Criteria |
 |-----|-------|----------|
-| `immediate` | Immediate safety risk | Brake failure, steering loss, fuel leak, smoke, overheating, sudden power loss, tire failure |
-| `monitor` | Monitor closely | Affects drivability; schedule service soon |
+| `immediate` | Immediate safety risk | Active brake/steering failure, fuel leak, smoke, **active** overheating (temp gauge in red, steam, coolant boiling over), sudden power loss, tire failure |
+| `monitor` | Monitor closely | Affects drivability or hints at a developing failure, but nothing described is happening *right now*; schedule service soon |
 | `routine` | Routine service | Cosmetic, minor, or long-standing without safety impact |
 
 Escalate if warning lights reported, issue persisted months, or symptom worsening.
+
+Borderline cases that come up often — anchor to these rather than re-deriving the line each time:
+- **Sweet/syrupy smell from the heater vents, no overheating gauge/warning light reported** → `monitor` (likely a small coolant leak or early heater-core seep — real, but not an active safety event). Only escalate to `immediate` if the driver also reports the temperature gauge running hot, visible steam, or coolant loss severe enough to risk overheating.
+- **Brake squeal only, pedal feel normal, no grinding/pulling** → `monitor` (worn pads, not yet a safety issue). Grinding, a soft/sinking pedal, or pulling to one side under braking → `immediate`.
+- **Warning light on, vehicle otherwise driving normally** → `monitor`, not `immediate`, unless the light is paired with one of the active-failure signs above.
+
+## Cost estimate anchoring
+
+`estimateRange` has no other calibration signal — without an anchor, independent runs on materically the same evidence will invent different numbers. Start from the band below for whichever category is the closest match to your leading probable cause, then adjust within or slightly beyond it for the specific vehicle (mileage/age, luxury/import parts markup, dealer-only parts) and evidence (e.g. "small leak" vs "severe leak"). Do not invent a range outside these bands without a specific reason tied to the evidence — and if you do, that reason should be reflected in `probableCauses` or `componentsToInspect`, not left implicit.
+
+| Category | Typical shop repair range (USD) |
+|----------|----------------------------------|
+| Small coolant leak / heater core seep, no active overheating | $150–600 |
+| Brake pads/rotors (routine wear, one axle) | $150–500 |
+| Brake system (calipers, lines, ABS-related) | $300–900 |
+| Battery / charging system (alternator, battery) | $150–700 |
+| Suspension (struts, control arms, one side) | $250–900 |
+| Exhaust (muffler, resonator, gasket) | $100–500 |
+| Catalytic converter | $500–2500 |
+| Transmission fluid/service or minor repair | $150–600 |
+| Transmission replacement/rebuild | $1800–4500 |
+| Engine sensor or minor electrical (e.g. O2 sensor, ignition coil) | $150–500 |
+| Major engine work (head gasket, timing components) | $1000–3500 |
+| Tires (one to two, mid-range brand) | $150–500 |
+| Diagnostic only / cause not yet isolated | $100–250 (labor to diagnose, before parts) |
+
+If the leading cause doesn't map cleanly to one of these, pick the closest and note the mismatch in `probableCauses` rather than guessing a number with no relation to any anchor.
 
 ## Final brief requirements
 

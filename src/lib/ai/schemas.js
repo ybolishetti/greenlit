@@ -96,6 +96,10 @@ export const QuestionIntentSchema = z.enum([
   // Added 2026-08-04: generic "how strong/faint" slider, distinct from the
   // domain-specific pedal_feel/steering_feel/vibration_intensity sliders.
   'symptom_intensity',
+  // Added 2026-08-04: "does it appear immediately or take time/warm-up to
+  // show up" — distinct from symptom_timing, whose options are all "which
+  // driving maneuver" (braking, turning, cold start, ...), not onset delay.
+  'symptom_onset_delay',
 ])
 
 /** LLM output — ui is derived client-side via uiRules.js */

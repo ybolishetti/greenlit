@@ -78,14 +78,40 @@ describe('symptom_intensity', () => {
   })
 })
 
+describe('symptom_onset_delay', () => {
+  it('is a single_select of immediate-vs-delayed options, distinct from symptom_timing\'s driving-maneuver options', () => {
+    const ui = selectUIForIntent('symptom_onset_delay')
+    expect(ui.type).toBe('single_select')
+    expect(ui.options.map((o) => o.value)).toEqual(
+      expect.arrayContaining(['immediate', 'brief-delay', 'extended-delay', 'inconsistent'])
+    )
+    expect(ui.options.map((o) => o.value)).not.toContain('braking')
+  })
+})
+
 describe('crossCheckIntent', () => {
-  it('remaps a timing-phrased prompt wrongly tagged with a checklist intent to symptom_timing', () => {
+  it('remaps a plain timing-phrased prompt wrongly tagged with a checklist intent to symptom_timing', () => {
+    expect(crossCheckIntent('When do you notice the vibration — only on the highway?', 'smell_description')).toBe(
+      'symptom_timing'
+    )
+  })
+
+  it('remaps an onset-delay prompt to symptom_onset_delay even when already tagged symptom_timing (options do not fit)', () => {
+    expect(
+      crossCheckIntent(
+        "When do you notice the sweet smell most — when you first turn on the heater, all the time it's running, or only after the car has been running for a while?",
+        'symptom_timing'
+      )
+    ).toBe('symptom_onset_delay')
+  })
+
+  it('remaps an onset-delay prompt tagged with a checklist intent to symptom_onset_delay, not symptom_timing', () => {
     expect(
       crossCheckIntent(
         'When do you first notice the sweet smell — as soon as you turn on the heat, or does it take a minute or two to appear?',
         'smell_description'
       )
-    ).toBe('symptom_timing')
+    ).toBe('symptom_onset_delay')
   })
 
   it('remaps an intensity-phrased prompt wrongly tagged with the smell checklist to symptom_intensity', () => {

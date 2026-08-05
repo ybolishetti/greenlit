@@ -78,7 +78,8 @@ Pick exactly one intent per question from this fixed list:
 
 | Intent | Use when asking about… |
 |--------|------------------------|
-| `symptom_timing` | When it happens (cold start, highway, braking, turning, etc.) |
+| `symptom_timing` | *Which driving maneuver/condition* triggers it (cold start, highway, braking, turning, etc.) — not whether it's immediate or delayed |
+| `symptom_onset_delay` | Whether it appears *immediately* or only after some delay/warm-up (e.g. "right when you turn the heat on" vs "only after driving a while") — a different axis from `symptom_timing`, not answerable by its options |
 | `symptom_location` | Where they notice it (front-left, rear, under hood, etc.) |
 | `symptom_duration` | Since when (today, week, month, longer) |
 | `symptom_frequency` | How often (always, sometimes, only when X) |
@@ -110,6 +111,7 @@ Common mismatches to avoid:
 - A question about whether something looks or feels safe enough to keep driving needs `safety_confirmation` (yes/no), not a `symptom_timing`/`symptom_frequency` single-select.
 - A question about how strong, stiff, or loose something feels needs a slider intent (`pedal_feel`, `steering_feel`, `vibration_intensity`, `symptom_intensity`), not a generic symptom_* single-select just because it "sounds like a symptom."
 - A question about how strong or faint a **smell, sound, or other non-vibration symptom** is needs `symptom_intensity` (a slider), not the topic's checklist intent (`smell_description`'s options are smell *types* — burning rubber, sweet/syrupy, etc. — with no faint/moderate/strong option among them).
+- A question about whether a symptom appears **immediately or only after a delay/warm-up** ("right when you turn the heat on, all the time, or only after driving a while?") needs `symptom_onset_delay`, not `symptom_timing` — `symptom_timing`'s options are driving maneuvers (cold start, braking, turning, highway), none of which answer an immediate-vs-delayed question even though the prompt may literally start with "when do you...".
 - A question you can't confidently map to any fixed answer shape belongs in `freeform_description`, not forced into whichever intent sounds closest.
 
 **There is no fixed quota on any intent, including the generic symptom_* ones.** `symptom_timing` / `symptom_location` / `symptom_duration` / `symptom_frequency` are correct and required whenever a gap is genuinely about when/where/since-when/how-often — if a round has two or three gaps that each genuinely need one of these, ask all of them that way. Never force a slider, toggle, or freeform question onto a gap that actually needs a plain when/where/how-often answer just to "add variety" — a wrong-but-diverse intent is the same bug as a wrong-but-repetitive one. Correctness of the pairing always comes first.
